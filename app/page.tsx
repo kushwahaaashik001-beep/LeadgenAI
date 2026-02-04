@@ -51,23 +51,6 @@ const Progress = ({ value = 0, className = "" }: any) => (
   </div>
 );
 
-// Custom icons (since lucide-react is missing)
-const Icons = {
-  Zap: () => <span>⚡</span>,
-  Crown: () => <span>👑</span>,
-  Target: () => <span>🎯</span>,
-  Clock: () => <span>⏱️</span>,
-  Sparkles: () => <span>✨</span>,
-  Shield: () => <span>🛡️</span>,
-  Rocket: () => <span>🚀</span>,
-  CreditCard: () => <span>💳</span>,
-  CheckCircle: () => <span>✅</span>,
-  TrendingUp: () => <span>📈</span>,
-  BellRing: () => <span>🔔</span>,
-  Brain: () => <span>🧠</span>,
-  ExternalLink: () => <span>↗️</span>
-};
-
 export default function Home() {
   const [activeTab, setActiveTab] = useState('All');
   const [credits, setCredits] = useState(5);
@@ -160,11 +143,29 @@ export default function Home() {
     }
   ];
 
-  // Pricing plans
+  // Fixed: Added 'name' property to all plans
   const creditPlans = [
-    { id: 'basic', credits: 15, price: 49, popular: false },
-    { id: 'pro', credits: 40, price: 99, popular: true },
-    { id: 'agency', credits: 100, price: 199, popular: false }
+    { 
+      id: 'basic', 
+      name: 'Starter Pack', // ✅ Added name property
+      credits: 15, 
+      price: 49, 
+      popular: false 
+    },
+    { 
+      id: 'pro', 
+      name: 'Pro Credits', // ✅ Added name property
+      credits: 40, 
+      price: 99, 
+      popular: true 
+    },
+    { 
+      id: 'agency', 
+      name: 'Agency Bundle', // ✅ Added name property
+      credits: 100, 
+      price: 199, 
+      popular: false 
+    }
   ];
 
   const proFeatures = [
@@ -583,6 +584,7 @@ export default function Home() {
                             <span className="text-white">⚡</span>
                           </div>
                           <div>
+                            {/* ✅ FIXED: Now using plan.name which exists */}
                             <h4 className="font-bold text-lg">{plan.name}</h4>
                             <p className="text-gray-400">{plan.credits} credits</p>
                           </div>
