@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase'; // Your Supabase client
+import { supabase } from '../lib/supabase'; // Your Supabase client
 import { Sparkles, Zap, Crown, Target, TrendingUp, Clock, Filter, Shield, Rocket, DollarSign, Users, CheckCircle } from 'lucide-react';
 
 // Reusable Components
