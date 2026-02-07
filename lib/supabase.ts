@@ -70,7 +70,7 @@ export const getSupabaseClient = (): SupabaseClient<Database> => {
   }
 
   try {
-    // ✅ PROPER configuration - fetch is part of global options
+    // ✅ PROPER configuration
     supabaseInstance = createClient<Database>(supabaseUrl, supabaseAnonKey, {
       auth: {
         autoRefreshToken: true,
@@ -84,8 +84,6 @@ export const getSupabaseClient = (): SupabaseClient<Database> => {
           'x-application-version': '1.0.0',
         },
       },
-      // ✅ CORRECT: No fetch property at top level
-      // Supabase handles fetch automatically
     });
 
     return supabaseInstance;
@@ -101,7 +99,7 @@ export const getSupabaseClient = (): SupabaseClient<Database> => {
   }
 };
 
-// ✅ Main client export
+// ✅ Main client export (WITHOUT strict typing for easier use)
 export const supabase = getSupabaseClient();
 
 /**
@@ -131,123 +129,6 @@ export const subscribeToNewLeads = (
   } catch (error) {
     console.error('Failed to subscribe to leads:', error);
     return null;
-  }
-};
-
-/**
- * ✅ Fetch Leads with Filtering
- * Safe database query with error handling
- */
-export const fetchLeads = async (options?: {
-  skill?: string;
-  limit?: number;
-  page?: number;
-}) => {
-  try {
-    const { skill, limit = 20, page = 1 } = options || {};
-    
-    let query = supabase
-      .from('leads')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .range((page - 1) * limit, page * limit - 1);
-
-    if (skill && skill !== 'All') {
-      query = query.or(`category.eq.${skill},skill.eq.${skill}`);
-    }
-
-    const { data, error } = await query;
-
-    if (error) {
-      console.error('Error fetching leads:', error);
-      return { data: [], error: null };
-    }
-
-    return { data: data || [], error: null };
-  } catch (error) {
-    console.error('Exception fetching leads:', error);
-    return { data: [], error };
-  }
-};
-
-/**
- * ✅ Update Lead Status
- * Mark lead as applied
- */
-export const markLeadAsApplied = async (leadId: string) => {
-  try {
-    const { error } = await supabase
-      .from('leads')
-      .update({
-        status: 'applied',
-        applied_at: new Date().toISOString(),
-      })
-      .eq('id', leadId);
-
-    return { success: !error, error };
-  } catch (error) {
-    console.error('Error marking lead as applied:', error);
-    return { success: false, error };
-  }
-};
-
-/**
- * ✅ Batch Insert Helper
- * For admin/import functionality
- */
-export const batchInsertLeads = async (
-  leads: Database['public']['Tables']['leads']['Insert'][]
-) => {
-  try {
-    const { data, error } = await supabase
-      .from('leads')
-      .insert(leads)
-      .select();
-
-    return { data, error };
-  } catch (error) {
-    console.error('Error batch inserting leads:', error);
-    return { data: null, error };
-  }
-};
-
-/**
- * ✅ Stats Helper
- * Get platform-wise statistics
- */
-export const getPlatformStats = async () => {
-  try {
-    const { data, error } = await supabase
-      .from('leads')
-      .select('platform, budget_level')
-      .gte('created_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString());
-
-    if (error) throw error;
-
-    const stats = {
-      total: data?.length || 0,
-      byPlatform: {} as Record<string, number>,
-      byBudget: {
-        high: 0,
-        medium: 0,
-        low: 0,
-      },
-    };
-
-    data?.forEach((lead) => {
-      // Platform stats
-      stats.byPlatform[lead.platform] = (stats.byPlatform[lead.platform] || 0) + 1;
-      
-      // Budget stats
-      if (lead.budget_level === 'high') stats.byBudget.high++;
-      else if (lead.budget_level === 'medium') stats.byBudget.medium++;
-      else stats.byBudget.low++;
-    });
-
-    return { data: stats, error: null };
-  } catch (error) {
-    console.error('Error fetching stats:', error);
-    return { data: null, error };
   }
 };
 
