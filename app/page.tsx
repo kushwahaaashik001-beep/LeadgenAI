@@ -189,7 +189,7 @@ export default function Home() {
       setLoading(true);
       try {
         const { data, error } = await supabase
-          .from('leads')
+          .from<any>('leads') // ✅ FIX: Added <any>
           .select('*')
           .order('created_at', { ascending: false })
           .limit(20);
@@ -294,7 +294,7 @@ export default function Home() {
         };
 
         const { error } = await supabase
-          .from('leads')
+          .from<any>('leads') // ✅ FIX: Added <any>
           .update(updateData)
           .eq('id', lead.id);
 
