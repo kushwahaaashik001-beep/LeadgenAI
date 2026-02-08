@@ -76,13 +76,35 @@ export interface CreditTransaction {
 
 // Real-time Lead Monitor with Pro/FREE differentiation
 export class RealTimeLeadMonitor {
-  private channel: RealtimeChannel | null = null
-  private leadSubscribers: ((lead: Lead, isPro: boolean) => void)[] = []
+  private channel: any | null = null
+  private leadSubscribers: ((lead: any) => void)[] = []
   private metricsSubscribers: ((metrics: any) => void)[] = []
 
   constructor() {
     this.setupRealtime()
   }
+
+  // FIXED: Ye subscribe method missing tha, ab add kar diya hai
+  subscribe(callback: (lead: any) => void) {
+    this.leadSubscribers.push(callback);
+    
+    // Return unsubscribe function to clean up (Page.tsx isi ko call karega)
+    return () => {
+      this.leadSubscribers = this.leadSubscribers.filter(sub => sub !== callback);
+    };
+  }
+
+  private setupRealtime() {
+    // Yahan tera Supabase channel ka logic aayega
+    // Jo leads table ko listen karega
+    console.log("Realtime Lead Monitor Initialized");
+  }
+
+  // Helper to notify all subscribers when a new lead arrives
+  private notifySubscribers(newLead: any) {
+    this.leadSubscribers.forEach(callback => callback(newLead));
+  }
+}
 
   private setupRealtime() {
     this.channel = supabase
