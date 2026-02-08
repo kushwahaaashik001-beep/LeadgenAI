@@ -5,7 +5,7 @@ import { motion } from 'framer-motion'
 import { 
   Clock, 
   MapPin,
-  chevronUp,
+  ChevronUp,
   ChevronDown,
   DollarSign, 
   Users,
