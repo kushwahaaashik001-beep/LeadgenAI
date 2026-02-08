@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { 
   Zap, 
@@ -8,7 +8,6 @@ import {
   Brain, 
   Send, 
   CheckCircle, 
-  AlertCircle,
   Clock,
   TrendingUp,
   Users,
@@ -29,59 +28,34 @@ import {
   Crown,
   Star,
   Award,
-  Trophy,
   BarChart3,
-  PieChart,
   Activity,
-  MousePointer,
-  Eye,
-  EyeOff,
   Settings,
-  LogOut,
   ChevronRight,
   RefreshCw,
   Pause,
   Play,
   Download,
-  Upload,
   Lock,
   Unlock,
   Wifi,
-  WifiOff,
   Battery,
-  BatteryCharging,
   ShieldCheck,
-  ShieldAlert,
-  Fingerprint,
   Key,
-  Ticket,
-  Gift,
   Coins,
   Wallet,
   CreditCard,
-  Receipt,
   History,
   Calendar,
   Timer,
-  Watch,
-  StopCircle,
-  SkipForward,
-  SkipBack,
-  FastForward,
-  Rewind,
   Volume2,
-  VolumeX,
   Mic,
-  MicOff,
   Video,
-  VideoOff,
   Phone,
-  PhoneOff,
   Mail,
   Heart,
   ThumbsUp,
   ThumbsDown,
-  Flag,
   HelpCircle,
   Info,
   X,
@@ -91,57 +65,25 @@ import {
   ChevronUp,
   ChevronLeft,
   MoreVertical,
-  MoreHorizontal,
   Plus,
   Minus,
-  Divide,
-  X as Multiply,
-  Percent,
-  Equal,
-  Hash,
-  AtSign,
-  Asterisk,
-  Slash,
-  Delete,
   Edit,
-  Edit2,
-  Edit3,
   Type,
   Bold,
   Italic,
-  Underline,
   Link,
-  Link2,
   Image,
   Camera,
-  Video as VideoIcon,
   Music,
   Headphones,
-  Mic2,
-  Radio,
   Tv,
   Monitor,
-  Smartphone,
-  Tablet,
   Laptop,
-  HardDrive,
-  Server as ServerIcon,
   Cloud,
-  CloudOff,
-  CloudRain,
-  CloudSnow,
-  CloudLightning,
   Sun,
-  Moon,
-  Sunrise,
-  Sunset,
-  Wind,
-  Thermometer,
-  Droplet,
-  Umbrella,
-  CloudDrizzle
+  Moon
 } from 'lucide-react'
-import { supabase, leadMonitor, CreditManager } from '@/lib/supabase'
+import { supabase, leadMonitor } from '@/lib/supabase'
 import { toast, Toaster } from 'sonner'
 import LiveTicker from '@/components/LiveTicker'
 import SkillSwitcher from '@/components/SkillSwitcher'
@@ -226,88 +168,111 @@ export default function OptimaCommandCenter() {
   // Refs
   const audioRef = useRef<HTMLAudioElement>(null)
   const notificationIntervalRef = useRef<NodeJS.Timeout>()
+  const unsubscribeRef = useRef<() => void>()
 
   // Initialize User
   useEffect(() => {
     fetchUserProfile()
     fetchLeads()
-    setupRealtime()
-    setupNotifications()
+    const unsubscribe = setupRealtime()
     
     return () => {
       clearInterval(notificationIntervalRef.current)
+      if (unsubscribeRef.current) {
+        unsubscribeRef.current()
+      }
+      if (unsubscribe) {
+        unsubscribe()
+      }
     }
   }, [])
 
+  // Fetch user profile
   async function fetchUserProfile() {
-    const { data: { user: authUser } } = await supabase.auth.getUser()
-    if (!authUser) return
+    try {
+      const { data: { user: authUser } } = await supabase.auth.getUser()
+      if (!authUser) return
 
-    const { data } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', authUser.id)
-      .single()
+      const { data } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', authUser.id)
+        .single()
 
-    if (data) {
-      setUser(data)
-      setIsPro(data.is_pro)
-      setCredits(data.credits)
-      setSelectedSkills(data.skills || ['video-editing'])
+      if (data) {
+        setUser(data)
+        setIsPro(data.is_pro)
+        setCredits(data.credits || 0)
+        setSelectedSkills(data.skills || ['video-editing'])
+      }
+    } catch (error) {
+      console.error('Error fetching user profile:', error)
     }
   }
 
+  // Fetch leads
   async function fetchLeads() {
-    const { data } = await supabase
-      .from('leads')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(100)
+    try {
+      const { data, error } = await supabase
+        .from('leads')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(100)
 
-    if (data) {
-      setLeads(data)
-      applyFilters(data)
-      calculateMetrics(data)
+      if (error) throw error
+      if (data) {
+        setLeads(data)
+        applyFilters(data)
+        calculateMetrics(data)
+      }
+    } catch (error) {
+      console.error('Error fetching leads:', error)
     }
   }
 
+  // Setup realtime subscription
   function setupRealtime() {
     const unsubscribe = leadMonitor.subscribe((newLead: Lead) => {
       // Free users get delayed leads (5-10 minutes)
       if (!isPro) {
         setTimeout(() => {
-          setLeads(prev => [newLead, ...prev])
-          applyFilters([newLead, ...leads])
+          setLeads(prev => [newLead, ...prev.slice(0, 99)])
+          applyFilters([newLead, ...leads.slice(0, 99)])
         }, Math.random() * 300000 + 300000) // 5-10 minutes delay
       } else {
         // Pro users get instant leads (10 seconds)
         setTimeout(() => {
-          setLeads(prev => [newLead, ...prev])
-          applyFilters([newLead, ...leads])
+          setLeads(prev => [newLead, ...prev.slice(0, 99)])
+          applyFilters([newLead, ...leads.slice(0, 99)])
           showProNotification(newLead)
         }, 10000) // 10 seconds
       }
     })
 
+    unsubscribeRef.current = unsubscribe
     return unsubscribe
   }
 
+  // Setup notifications
   function setupNotifications() {
     if (!isPro) return
 
     // Setup Telegram notifications for Pro users
     if (user?.telegram_id) {
-  notificationIntervalRef.current = setInterval(() => {
-    // checkAndSendTelegramNotifications()  
-  }, 10000)
-}
+      notificationIntervalRef.current = setInterval(() => {
+        // checkAndSendTelegramNotifications()
+      }, 10000)
+    }
 
     // Play sound for new leads
     if (notificationEnabled && audioRef.current) {
-      audioRef.current.play().catch(console.error)
+      audioRef.current.play().catch(() => {
+        // Silent fail for audio
+      })
     }
   }
 
+  // Show pro notification
   function showProNotification(lead: Lead) {
     if (!isPro) return
 
@@ -324,8 +289,8 @@ export default function OptimaCommandCenter() {
           </div>
           <div>
             <div className="font-bold">🎯 SNIPE ALERT!</div>
-            <div className="text-sm opacity-90">New {lead.skills[0]} lead in {lead.location}</div>
-            <div className="text-xs mt-1">Budget: ${lead.budget.toLocaleString()}</div>
+            <div className="text-sm opacity-90">New {lead.skills?.[0] || 'lead'} in {lead.location}</div>
+            <div className="text-xs mt-1">Budget: ${lead.budget?.toLocaleString() || '0'}</div>
           </div>
         </div>
         <div className="mt-3 flex gap-2">
@@ -338,7 +303,10 @@ export default function OptimaCommandCenter() {
           >
             Generate AI Pitch
           </button>
-          <button className="px-4 bg-black/30 py-2 rounded-lg hover:bg-black/40">
+          <button 
+            onClick={() => toast.dismiss(t)}
+            className="px-4 bg-black/30 py-2 rounded-lg hover:bg-black/40"
+          >
             View
           </button>
         </div>
@@ -346,13 +314,14 @@ export default function OptimaCommandCenter() {
     ))
   }
 
+  // Apply filters to leads
   function applyFilters(leadsList: Lead[]) {
-    let filtered = leadsList
+    let filtered = [...leadsList]
     
     // Filter by selected skills
     if (selectedSkills.length > 0) {
       filtered = filtered.filter(lead => 
-        lead.skills?.some(skill => selectedSkills.includes(skill))
+        lead.skills?.some((skill: string) => selectedSkills.includes(skill))
       )
     }
     
@@ -364,13 +333,16 @@ export default function OptimaCommandCenter() {
     setFilteredLeads(filtered)
   }
 
+  // Calculate metrics
   function calculateMetrics(leadsList: Lead[]) {
     const today = new Date().toDateString()
     const todayLeads = leadsList.filter(l => 
       new Date(l.created_at).toDateString() === today
     )
     
-    const appliedLeads = leadsList.filter(l => l.status === 'applied' || l.status === 'replied' || l.status === 'hired')
+    const appliedLeads = leadsList.filter(l => 
+      l.status === 'applied' || l.status === 'replied' || l.status === 'hired'
+    )
     const hiredLeads = leadsList.filter(l => l.status === 'hired')
     
     setMetrics({
@@ -378,65 +350,58 @@ export default function OptimaCommandCenter() {
       leads_today: todayLeads.length,
       application_rate: leadsList.length > 0 ? (appliedLeads.length / leadsList.length) * 100 : 0,
       hire_rate: leadsList.length > 0 ? (hiredLeads.length / leadsList.length) * 100 : 0,
-      avg_response_time: 0, // Calculate from actual data
+      avg_response_time: 0,
       revenue_generated: hiredLeads.reduce((sum, l) => sum + (l.budget || 0), 0),
-      active_users: 0, // Get from backend
+      active_users: 0,
       system_health: 100
     })
   }
 
+  // Handle skill change
   async function handleSkillChange(skills: string[]) {
     setSelectedSkills(skills)
-    if (isPro) {
-      // Update user's skills in database
-      await supabase
-        .from('profiles')
-        .update({ skills })
-        .eq('id', user?.id)
+    if (isPro && user?.id) {
+      try {
+        await supabase
+          .from('profiles')
+          .update({ skills })
+          .eq('id', user.id)
+      } catch (error) {
+        console.error('Error updating skills:', error)
+      }
     }
   }
 
-  async function handleLeadStatusChange(leadId: string, status: Lead['status']) {
-    const updatedLeads = leads.map(lead => 
-      lead.id === leadId ? { ...lead, status } : lead
-    )
-    setLeads(updatedLeads)
-    
-    await supabase
-      .from('leads')
-      .update({ status })
-      .eq('id', leadId)
-  }
-
-  async function handleUpgradeToPro() {
-    const { data } = await supabase.functions.invoke('create-checkout', {
-      body: { plan: 'pro' }
-    })
-    
-    if (data?.url) {
-      window.location.href = data.url
-    }
-  }
-
-  // AI Pitch Generator Function
-  async function generateAIPitch(lead: Lead) {
-    if (!isPro) {
-      toast.error('Upgrade to PRO to use AI Pitch Generator')
-      return
-    }
-    
+  // Handle lead status change - FIXED TYPE ERROR
+  async function handleLeadStatusChange(leadId: string, status: 'new' | 'applied' | 'replied' | 'hired' | 'rejected') {
     try {
-      const response = await fetch('/api/generate-pitch', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ lead })
+      const updatedLeads = leads.map(lead => 
+        lead.id === leadId ? { ...lead, status } : lead
+      )
+      setLeads(updatedLeads)
+      
+      await supabase
+        .from('leads')
+        .update({ status })
+        .eq('id', leadId)
+    } catch (error) {
+      console.error('Error updating lead status:', error)
+    }
+  }
+
+  // Handle upgrade to pro
+  async function handleUpgradeToPro() {
+    try {
+      const { data } = await supabase.functions.invoke('create-checkout', {
+        body: { plan: 'pro' }
       })
       
-      const data = await response.json()
-      return data.pitch
+      if (data?.url) {
+        window.location.href = data.url
+      }
     } catch (error) {
-      console.error('Error generating pitch:', error)
-      return null
+      console.error('Error upgrading to pro:', error)
+      toast.error('Failed to initiate upgrade. Please try again.')
     }
   }
 
@@ -452,11 +417,11 @@ export default function OptimaCommandCenter() {
             key={i}
             className="absolute w-1 h-1 bg-purple-500 rounded-full"
             initial={{ 
-              x: Math.random() * 100 + 'vw',
-              y: Math.random() * 100 + 'vh'
+              x: `${Math.random() * 100}vw`,
+              y: `${Math.random() * 100}vh`
             }}
             animate={{
-              y: [null, '-20px', '0px'],
+              y: ['0px', '-20px', '0px'],
               opacity: [0, 1, 0]
             }}
             transition={{
@@ -559,7 +524,10 @@ export default function OptimaCommandCenter() {
                   <div>
                     <h3 className="text-sm font-medium text-gray-400 mb-3">CONTROLS</h3>
                     <div className="space-y-2">
-                      <button className="w-full flex items-center justify-between p-3 bg-gray-800/50 rounded-lg hover:bg-gray-800">
+                      <button 
+                        onClick={() => setAutoApply(!autoApply)}
+                        className="w-full flex items-center justify-between p-3 bg-gray-800/50 rounded-lg hover:bg-gray-800"
+                      >
                         <span className="flex items-center gap-2">
                           <Target className="h-4 w-4" />
                           Auto-Snipe
@@ -677,7 +645,7 @@ export default function OptimaCommandCenter() {
                 </div>
 
                 <AnimatePresence mode="wait">
-                  {filteredLeads.map((lead, index) => (
+                  {filteredLeads.slice(0, 10).map((lead, index) => (
                     <motion.div
                       key={lead.id}
                       initial={{ opacity: 0, y: 20 }}
@@ -693,28 +661,36 @@ export default function OptimaCommandCenter() {
                             <span className={`px-3 py-1 rounded-full text-xs font-medium ${
                               lead.tier === 'S' ? 'bg-yellow-400/20 text-yellow-400' :
                               lead.tier === 'A' ? 'bg-green-400/20 text-green-400' :
-                              'bg-blue-400/20 text-blue-400'
+                              lead.tier === 'B' ? 'bg-blue-400/20 text-blue-400' :
+                              'bg-gray-400/20 text-gray-400'
                             }`}>
                               Tier {lead.tier}
                             </span>
                             <span className="text-sm text-gray-400">{lead.location}</span>
                           </div>
                           <h3 className="font-bold text-lg">{lead.title}</h3>
-                          <p className="text-gray-400 text-sm mt-1">{lead.description}</p>
+                          <p className="text-gray-400 text-sm mt-1 line-clamp-2">
+                            {lead.description || 'No description available'}
+                          </p>
                         </div>
                         <div className="text-right">
-                          <div className="text-2xl font-bold text-green-400">${lead.budget?.toLocaleString()}</div>
+                          <div className="text-2xl font-bold text-green-400">${lead.budget?.toLocaleString() || '0'}</div>
                           <div className="text-xs text-gray-400">Budget</div>
                         </div>
                       </div>
 
                       {/* Skills & Client History */}
                       <div className="flex flex-wrap gap-2 mb-4">
-                        {lead.skills?.map((skill, i) => (
+                        {lead.skills?.slice(0, 3).map((skill, i) => (
                           <span key={i} className="px-3 py-1 bg-purple-500/20 text-purple-300 rounded-full text-xs">
                             {skill}
                           </span>
                         ))}
+                        {lead.skills?.length > 3 && (
+                          <span className="px-3 py-1 bg-gray-800 text-gray-400 rounded-full text-xs">
+                            +{lead.skills.length - 3} more
+                          </span>
+                        )}
                       </div>
 
                       {/* Action Buttons */}
@@ -726,12 +702,18 @@ export default function OptimaCommandCenter() {
                                 setSelectedLead(lead)
                                 setShowAIPitch(true)
                               }}
-                              className="flex-1 bg-gradient-to-r from-purple-600 to-pink-600 py-3 rounded-xl font-medium hover:opacity-90"
+                              className="flex-1 bg-gradient-to-r from-purple-600 to-pink-600 py-3 rounded-xl font-medium hover:opacity-90 flex items-center justify-center gap-2"
                             >
-                              <Send className="inline mr-2 h-4 w-4" />
+                              <Send className="h-4 w-4" />
                               Generate AI Pitch
                             </button>
-                            <button className="px-4 bg-gray-800 rounded-xl hover:bg-gray-700">
+                            <button 
+                              onClick={() => {
+                                navigator.clipboard.writeText(lead.url)
+                                toast.success('URL copied to clipboard!')
+                              }}
+                              className="px-4 bg-gray-800 rounded-xl hover:bg-gray-700"
+                            >
                               <Copy className="h-4 w-4" />
                             </button>
                           </>
@@ -742,11 +724,13 @@ export default function OptimaCommandCenter() {
                         )}
                       </div>
 
-                      {/* Status Tracker */}
+                      {/* Status Tracker - FIXED: Type-safe status change */}
                       <div className="mt-4">
                         <LeadStatusTracker 
                           lead={lead}
-                          onStatusChange={(status) => handleLeadStatusChange(lead.id, status)}
+                          onStatusChange={(status: 'new' | 'applied' | 'replied' | 'hired' | 'rejected') => 
+                            handleLeadStatusChange(lead.id, status)
+                          }
                         />
                       </div>
                     </motion.div>
@@ -835,7 +819,10 @@ export default function OptimaCommandCenter() {
                       <p className="text-sm text-gray-400 mb-3">
                         Analyze client history and success probability
                       </p>
-                      <button className="w-full py-2 bg-gray-800 rounded-lg hover:bg-gray-700">
+                      <button 
+                        onClick={() => toast.info('Pro feature - Coming soon!')}
+                        className="w-full py-2 bg-gray-800 rounded-lg hover:bg-gray-700"
+                      >
                         Analyze
                       </button>
                     </div>
@@ -848,7 +835,10 @@ export default function OptimaCommandCenter() {
                       <p className="text-sm text-gray-400 mb-3">
                         AI-powered negotiation strategies
                       </p>
-                      <button className="w-full py-2 bg-gray-800 rounded-lg hover:bg-gray-700">
+                      <button 
+                        onClick={() => toast.info('Pro feature - Coming soon!')}
+                        className="w-full py-2 bg-gray-800 rounded-lg hover:bg-gray-700"
+                      >
                         Negotiate
                       </button>
                     </div>
@@ -908,7 +898,16 @@ export default function OptimaCommandCenter() {
       />
 
       {/* Toaster for notifications */}
-      <Toaster position="bottom-right" richColors />
+      <Toaster 
+        position="bottom-right" 
+        toastOptions={{
+          style: {
+            background: '#1f2937',
+            color: '#fff',
+            border: '1px solid #374151'
+          }
+        }}
+      />
     </div>
   )
 }
