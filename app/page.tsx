@@ -2,30 +2,13 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
+import type { Database } from '@/lib/supabase';
 import { Sparkles, Zap, Crown, Target, TrendingUp, Clock, Filter, Shield, Rocket, DollarSign, Users, CheckCircle, X } from 'lucide-react';
 
-// ✅ Type-safe interfaces with all required fields
-interface Lead {
-  id: string;
-  title: string;
-  description: string;
-  platform: 'twitter' | 'linkedin' | 'reddit' | 'discord' | 'email';
-  category: string;
-  skill: string;
-  budget: string;
-  budget_level: 'low' | 'medium' | 'high';
-  url: string;
-  match_score: number;
-  is_verified: boolean;
-  created_at: string;
-  status?: 'pending' | 'applied' | 'closed';
-  applied_at?: string;
-}
-
-interface LeadUpdate {
-  status: 'pending' | 'applied' | 'closed';
-  applied_at: string;
-}
+// ✅ Type Definitions
+type Lead = Database['public']['Tables']['leads']['Row'];
+type LeadInsert = Database['public']['Tables']['leads']['Insert'];
+type LeadUpdate = Database['public']['Tables']['leads']['Update'];
 
 interface CreditPlan {
   id: string;
@@ -42,7 +25,7 @@ interface Stats {
   successRate: string;
 }
 
-// ✅ Reusable Components with proper typing
+// ✅ Reusable Components
 const GlassCard = ({ 
   children, 
   className = "", 
@@ -188,25 +171,25 @@ export default function Home() {
     const fetchLeads = async () => {
       setLoading(true);
       try {
-        // Is baar humne 'supabase' ke saath (as any) lagaya hai
-const { data, error } = await (supabase as any)
-  .from('leads') 
-  .select('*')
-  .order('created_at', { ascending: false })
-  .limit(20);
-if (!error && data) {
-          const typedData = data as Lead[];
-          setLeads(typedData);
+        // ✅ FIXED: No need for (supabase as any) - proper typing
+        const { data, error } = await supabase
+          .from('leads')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(20);
+        
+        if (!error && data) {
+          setLeads(data);
           
           const today = new Date();
-          const todayLeads = typedData.filter((lead: Lead) => {
+          const todayLeads = data.filter((lead) => {
             const leadDate = new Date(lead.created_at);
             return leadDate.toDateString() === today.toDateString();
           }).length;
 
           setStats(prev => ({
             ...prev,
-            totalLeads: typedData.length,
+            totalLeads: data.length,
             todayLeads
           }));
         }
@@ -219,7 +202,7 @@ if (!error && data) {
 
     fetchLeads();
 
-    // ✅ Real-time subscription
+    // ✅ Real-time subscription - FIXED: Proper payload typing
     const channel = supabase
       .channel('live_leads')
       .on(
@@ -229,10 +212,9 @@ if (!error && data) {
           schema: 'public',
           table: 'leads'
         },
-        (payload) => {
+        (payload: { new: Lead }) => {
           console.log('New lead received:', payload.new);
-          const newLead = payload.new as Lead;
-          setLeads(prev => [newLead, ...prev]);
+          setLeads(prev => [payload.new, ...prev]);
           setStats(prev => ({
             ...prev,
             totalLeads: prev.totalLeads + 1,
@@ -287,14 +269,14 @@ if (!error && data) {
       }
 
       try {
-        // ✅ CORRECT: Properly typed update with explicit interface
+        // ✅ FIXED: Using proper LeadUpdate type
         const updateData: LeadUpdate = { 
           status: 'applied', 
           applied_at: new Date().toISOString() 
         };
 
         const { error } = await supabase
-          .from<any>('leads') // ✅ FIX: Added <any>
+          .from('leads')
           .update(updateData)
           .eq('id', lead.id);
 
@@ -308,7 +290,7 @@ if (!error && data) {
                   ...l, 
                   status: 'applied', 
                   applied_at: new Date().toISOString() 
-                } as Lead
+                }
               : l
           ));
         }
@@ -332,7 +314,7 @@ if (!error && data) {
   const handleUpgradeToPro = () => {
     setIsPro(true);
     setShowPricing(false);
-    setCredits(999); // Unlimited credits for pro
+    setCredits(999);
     alert('🚀 Welcome to OPTIMA PRO! Enjoy premium features!');
   };
 
