@@ -11,8 +11,7 @@ import {
   Network, RefreshCw, Play, Pause, StopCircle, GitMerge,
   BrainCircuit, CircuitBoard, Satellite, Radar, Telescope,
   ChevronRight, ExternalLink, Eye, EyeOff, Bell, BellOff,
-  Database as DatabaseIcon, Key, Globe as GlobeIcon,
-  Shield as ShieldIcon, Cpu as CpuIcon
+  Key
 } from 'lucide-react';
 
 // ✅ Type Definitions
@@ -602,7 +601,7 @@ export default function Home() {
             { id: 'leads' as const, label: 'Quantum Leads', icon: <Sparkles className="w-4 h-4" /> },
             { id: 'analytics' as const, label: 'Analytics', icon: <BarChart3 className="w-4 h-4" /> },
             { id: 'logs' as const, label: 'System Logs', icon: <Terminal className="w-4 h-4" /> },
-            { id: 'config' as const, label: 'Engine Config', icon: <Cogs className="w-4 h-4" /> }
+            { id: 'config' as const, label: 'Engine Config', icon: <Cog className="w-4 h-4" /> }
           ].map((tab) => (
             <button
               key={tab.id}
@@ -985,7 +984,7 @@ export default function Home() {
         {activeTab === 'config' && (
           <QuantumGlassCard className="p-6">
             <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
-              <Cogs className="w-6 h-6" />
+              <Cog className="w-6 h-6" />
               Quantum Engine Configuration
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
