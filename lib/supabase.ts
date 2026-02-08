@@ -76,96 +76,85 @@ export interface CreditTransaction {
 
 // Real-time Lead Monitor with Pro/FREE differentiation
 export class RealTimeLeadMonitor {
-  private channel: any | null = null
-  private leadSubscribers: ((lead: any) => void)[] = []
+  private channel: RealtimeChannel | null = null
+  private leadSubscribers: ((lead: Lead, isProLead: boolean) => void)[] = []
   private metricsSubscribers: ((metrics: any) => void)[] = []
 
   constructor() {
     this.setupRealtime()
   }
 
-  // FIXED: Ye subscribe method missing tha, ab add kar diya hai
-  subscribe(callback: (lead: any) => void) {
-    this.leadSubscribers.push(callback);
-    
-    // Return unsubscribe function to clean up (Page.tsx isi ko call karega)
-    return () => {
-      this.leadSubscribers = this.leadSubscribers.filter(sub => sub !== callback);
-    };
-  }
-
+  // FIXED: Duplicate setupRealtime method removed
   private setupRealtime() {
-    // Yahan tera Supabase channel ka logic aayega
-    // Jo leads table ko listen karega
-    console.log("Realtime Lead Monitor Initialized");
+    try {
+      this.channel = supabase
+        .channel('optima-leads')
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'leads'
+          },
+          async (payload: any) => {
+            const newLead = payload.new as Lead
+            
+            // Check if lead qualifies for Pro users (high budget, verified)
+            const isProLead = newLead.budget >= 500 && newLead.tier !== 'C'
+            
+            // Notify all subscribers with lead and qualification status
+            this.leadSubscribers.forEach(callback => {
+              callback(newLead, isProLead)
+            })
+
+            // Update metrics
+            await this.updateMetrics()
+          }
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'leads'
+          },
+          (payload: any) => {
+            const updatedLead = payload.new as Lead
+            this.leadSubscribers.forEach(callback => {
+              callback(updatedLead, updatedLead.budget >= 500)
+            })
+          }
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'lead_metrics'
+          },
+          (payload: any) => {
+            this.metricsSubscribers.forEach(callback => callback(payload.new))
+          }
+        )
+        .subscribe((status: any) => {
+          console.log('Realtime status:', status)
+        })
+    } catch (error) {
+      console.error('Error setting up realtime:', error)
+    }
   }
 
-  // Helper to notify all subscribers when a new lead arrives
-  private notifySubscribers(newLead: any) {
-    this.leadSubscribers.forEach(callback => callback(newLead));
-  }
-}
-
-  private setupRealtime() {
-    this.channel = supabase
-      .channel('optima-leads')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'leads'
-        },
-        async (payload) => {
-          const newLead = payload.new as Lead
-          
-          // Check if lead qualifies for Pro users (high budget, verified)
-          const isProLead = newLead.budget >= 500 && newLead.tier !== 'C'
-          
-          // Notify all subscribers with lead and qualification status
-          this.leadSubscribers.forEach(callback => {
-            callback(newLead, isProLead)
-          })
-
-          // Update metrics
-          this.updateMetrics()
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'leads'
-        },
-        (payload) => {
-          const updatedLead = payload.new as Lead
-          this.leadSubscribers.forEach(callback => {
-            callback(updatedLead, updatedLead.budget >= 500)
-          })
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'lead_metrics'
-        },
-        (payload) => {
-          this.metricsSubscribers.forEach(callback => callback(payload.new))
-        }
-      )
-      .subscribe()
-  }
-
-  subscribeToLeads(callback: (lead: Lead, isProLead: boolean) => void) {
+  // FIXED: Simplified subscribe method for page.tsx
+  subscribe(callback: (lead: Lead, isProLead: boolean) => void) {
     this.leadSubscribers.push(callback)
+    
+    // Return unsubscribe function to clean up
     return () => {
       this.leadSubscribers = this.leadSubscribers.filter(cb => cb !== callback)
     }
   }
 
+  // FIXED: Removed duplicate method name
   subscribeToMetrics(callback: (metrics: any) => void) {
     this.metricsSubscribers.push(callback)
     return () => {
@@ -173,13 +162,20 @@ export class RealTimeLeadMonitor {
     }
   }
 
-  async updateMetrics() {
-    const { data } = await supabase.rpc('update_lead_metrics')
-    return data
+  private async updateMetrics() {
+    try {
+      const { data } = await supabase.rpc('update_lead_metrics')
+      return data
+    } catch (error) {
+      console.error('Error updating metrics:', error)
+      return null
+    }
   }
 
   unsubscribe() {
-    this.channel?.unsubscribe()
+    if (this.channel) {
+      supabase.removeChannel(this.channel)
+    }
     this.leadSubscribers = []
     this.metricsSubscribers = []
   }
@@ -188,15 +184,16 @@ export class RealTimeLeadMonitor {
 // Telegram Bot Integration for Pro Users
 export class TelegramBotService {
   static async sendNotification(userId: string, lead: Lead) {
-    const { data: user } = await supabase
-      .from('profiles')
-      .select('telegram_id, is_pro')
-      .eq('id', userId)
-      .single()
+    try {
+      const { data: user } = await supabase
+        .from('profiles')
+        .select('telegram_id, is_pro')
+        .eq('id', userId)
+        .single()
 
-    if (!user?.is_pro || !user.telegram_id) return
+      if (!user?.is_pro || !user.telegram_id) return
 
-    const message = `
+      const message = `
 🎯 *NEW SNIPE ALERT!*
 *${lead.title}*
 📍 ${lead.location}
@@ -206,55 +203,68 @@ export class TelegramBotService {
 ${lead.description?.substring(0, 100)}...
 
 [View Lead](${lead.url})
-    `.trim()
+      `.trim()
 
-    // Call Telegram bot API
-    const response = await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: user.telegram_id,
-        text: message,
-        parse_mode: 'Markdown',
-        reply_markup: {
-          inline_keyboard: [[
-            { text: 'Generate AI Pitch', callback_data: `generate_pitch_${lead.id}` },
-            { text: 'Apply Now', url: lead.url }
-          ]]
-        }
+      // Call Telegram bot API
+      const response = await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: user.telegram_id,
+          text: message,
+          parse_mode: 'Markdown',
+          reply_markup: {
+            inline_keyboard: [[
+              { text: 'Generate AI Pitch', callback_data: `generate_pitch_${lead.id}` },
+              { text: 'Apply Now', url: lead.url }
+            ]]
+          }
+        })
       })
-    })
 
-    return response.json()
+      return await response.json()
+    } catch (error) {
+      console.error('Error sending Telegram notification:', error)
+      return null
+    }
   }
 
   static async connectTelegram(userId: string) {
-    const { data } = await supabase.functions.invoke('generate-telegram-token', {
-      body: { userId }
-    })
-    return data.token
+    try {
+      const { data } = await supabase.functions.invoke('generate-telegram-token', {
+        body: { userId }
+      })
+      return data?.token
+    } catch (error) {
+      console.error('Error connecting Telegram:', error)
+      return null
+    }
   }
 }
 
 // AI Pitch Generator Service
 export class AIPitchService {
-  static async generatePitch(lead: Lead, userSkills: string[]): Promise<string> {
-    // Check if user is Pro
-    const { data: user } = await supabase
-      .from('profiles')
-      .select('is_pro, credits')
-      .eq('id', (await supabase.auth.getUser()).data.user?.id)
-      .single()
+  static async generatePitch(lead: Lead, userSkills: string[]): Promise<string | null> {
+    try {
+      // Check if user is Pro
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('User not authenticated')
 
-    if (!user?.is_pro) {
-      throw new Error('AI Pitch Generator requires PRO subscription')
-    }
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('is_pro, credits')
+        .eq('id', user.id)
+        .single()
 
-    // Deduct credits
-    await CreditManager.deductCredits(user.data.user.id, 5, 'AI Pitch Generation')
+      if (!profile?.is_pro) {
+        throw new Error('AI Pitch Generator requires PRO subscription')
+      }
 
-    // Call AI API (Gemini/Groq)
-    const prompt = `
+      // Deduct credits
+      await CreditManager.deductCredits(user.id, 5, 'AI Pitch Generation')
+
+      // Call AI API (Gemini/Groq)
+      const prompt = `
 Generate a professional pitch for this freelance opportunity:
 
 Client Post: "${lead.title}"
@@ -273,77 +283,104 @@ Create a personalized pitch that:
 5. Is friendly but professional
 
 Format in markdown with bullet points.
-    `.trim()
+      `.trim()
 
-    const response = await fetch('/api/ai/generate-pitch', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt })
-    })
+      const response = await fetch('/api/ai/generate-pitch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt })
+      })
 
-    const data = await response.json()
-    return data.pitch
+      if (!response.ok) throw new Error('AI service failed')
+
+      const data = await response.json()
+      return data.pitch
+    } catch (error) {
+      console.error('Error generating AI pitch:', error)
+      return null
+    }
   }
 
   static async savePitch(leadId: string, pitch: string) {
-    const { data, error } = await supabase
-      .from('lead_pitches')
-      .insert({
-        lead_id: leadId,
-        pitch,
-        used_at: new Date().toISOString()
-      })
+    try {
+      const { data, error } = await supabase
+        .from('lead_pitches')
+        .insert({
+          lead_id: leadId,
+          pitch,
+          used_at: new Date().toISOString()
+        })
 
-    if (error) throw error
-    return data
+      if (error) throw error
+      return data
+    } catch (error) {
+      console.error('Error saving pitch:', error)
+      return null
+    }
   }
 }
 
 // Subscription Manager
 export class SubscriptionManager {
   static async upgradeToPro(userId: string, plan: 'monthly' | 'yearly') {
-    const price = plan === 'monthly' ? 2499 : 24999 // ₹2,499/month or ₹24,999/year
-    
-    const { data: session } = await supabase.functions.invoke('create-checkout-session', {
-      body: {
-        userId,
-        price,
-        plan,
-        successUrl: `${window.location.origin}/dashboard?upgrade=success`,
-        cancelUrl: `${window.location.origin}/dashboard?upgrade=cancelled`
-      }
-    })
+    try {
+      const price = plan === 'monthly' ? 2499 : 24999 // ₹2,499/month or ₹24,999/year
+      
+      const { data: session } = await supabase.functions.invoke('create-checkout-session', {
+        body: {
+          userId,
+          price,
+          plan,
+          successUrl: `${window.location.origin}/dashboard?upgrade=success`,
+          cancelUrl: `${window.location.origin}/dashboard?upgrade=cancelled`
+        }
+      })
 
-    if (session?.url) {
-      window.location.href = session.url
+      if (session?.url) {
+        window.location.href = session.url
+      }
+      return session
+    } catch (error) {
+      console.error('Error upgrading to pro:', error)
+      return null
     }
   }
 
   static async cancelSubscription(userId: string) {
-    const { data, error } = await supabase
-      .from('subscriptions')
-      .update({ 
-        status: 'cancelled',
-        cancel_at_period_end: true 
-      })
-      .eq('user_id', userId)
-      .eq('status', 'active')
+    try {
+      const { data, error } = await supabase
+        .from('subscriptions')
+        .update({ 
+          status: 'cancelled',
+          cancel_at_period_end: true 
+        })
+        .eq('user_id', userId)
+        .eq('status', 'active')
 
-    if (error) throw error
-    return data
+      if (error) throw error
+      return data
+    } catch (error) {
+      console.error('Error cancelling subscription:', error)
+      return null
+    }
   }
 
   static async checkSubscriptionStatus(userId: string) {
-    const { data } = await supabase
-      .from('subscriptions')
-      .select('*')
-      .eq('user_id', userId)
-      .in('status', ['active', 'past_due', 'cancelled'])
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single()
+    try {
+      const { data } = await supabase
+        .from('subscriptions')
+        .select('*')
+        .eq('user_id', userId)
+        .in('status', ['active', 'past_due', 'cancelled'])
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single()
 
-    return data
+      return data
+    } catch (error) {
+      console.error('Error checking subscription:', error)
+      return null
+    }
   }
 }
 
@@ -355,93 +392,131 @@ export class CreditManager {
     is_pro: boolean
     unlimited: boolean
   }> {
-    const { data } = await supabase
-      .from('profiles')
-      .select('credits, daily_snipes, is_pro')
-      .eq('id', userId)
-      .single()
+    try {
+      const { data } = await supabase
+        .from('profiles')
+        .select('credits, daily_snipes, is_pro')
+        .eq('id', userId)
+        .single()
 
-    if (!data) return { credits: 0, daily_snipes: 0, is_pro: false, unlimited: false }
+      if (!data) return { credits: 0, daily_snipes: 0, is_pro: false, unlimited: false }
 
-    // Pro users get unlimited daily snipes
-    const unlimited = data.is_pro
-    const daily_snipes = unlimited ? Infinity : Math.max(0, 5 - data.daily_snipes)
+      // Pro users get unlimited daily snipes
+      const unlimited = data.is_pro
+      const daily_snipes = unlimited ? Infinity : Math.max(0, 5 - data.daily_snipes)
 
-    return {
-      credits: data.credits,
-      daily_snipes,
-      is_pro: data.is_pro,
-      unlimited
+      return {
+        credits: data.credits,
+        daily_snipes,
+        is_pro: data.is_pro,
+        unlimited
+      }
+    } catch (error) {
+      console.error('Error getting balance:', error)
+      return { credits: 0, daily_snipes: 0, is_pro: false, unlimited: false }
     }
   }
 
   static async deductCredits(userId: string, amount: number, reason: string) {
-    const { data: user } = await supabase
-      .from('profiles')
-      .select('credits, is_pro')
-      .eq('id', userId)
-      .single()
+    try {
+      const { data: user } = await supabase
+        .from('profiles')
+        .select('credits, is_pro')
+        .eq('id', userId)
+        .single()
 
-    if (!user) throw new Error('User not found')
+      if (!user) throw new Error('User not found')
 
-    // Pro users don't deduct credits for basic operations
-    if (user.is_pro && amount <= 10) {
-      return { success: true, credits_remaining: user.credits }
+      // Pro users don't deduct credits for basic operations
+      if (user.is_pro && amount <= 10) {
+        return { success: true, credits_remaining: user.credits }
+      }
+
+      if (user.credits < amount) {
+        throw new Error('Insufficient credits')
+      }
+
+      const { data, error } = await supabase.rpc('deduct_user_credits', {
+        p_user_id: userId,
+        p_amount: amount,
+        p_reason: reason
+      })
+
+      if (error) throw error
+      return data
+    } catch (error) {
+      console.error('Error deducting credits:', error)
+      throw error
     }
-
-    if (user.credits < amount) {
-      throw new Error('Insufficient credits')
-    }
-
-    const { data, error } = await supabase.rpc('deduct_user_credits', {
-      p_user_id: userId,
-      p_amount: amount,
-      p_reason: reason
-    })
-
-    if (error) throw error
-    return data
   }
 
   static async addCredits(userId: string, amount: number, packageId?: string) {
-    const { data, error } = await supabase.rpc('add_user_credits', {
-      p_user_id: userId,
-      p_amount: amount,
-      p_package_id: packageId
-    })
+    try {
+      const { data, error } = await supabase.rpc('add_user_credits', {
+        p_user_id: userId,
+        p_amount: amount,
+        p_package_id: packageId
+      })
 
-    if (error) throw error
-    return data
+      if (error) throw error
+      return data
+    } catch (error) {
+      console.error('Error adding credits:', error)
+      throw error
+    }
+  }
+
+  static async getTransactions(userId: string, limit = 50) {
+    try {
+      const { data, error } = await supabase
+        .from('credit_transactions')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(limit)
+
+      if (error) throw error
+      return data as CreditTransaction[]
+    } catch (error) {
+      console.error('Error getting transactions:', error)
+      return []
+    }
   }
 }
 
 // Lead Status Tracker
 export class LeadStatusTracker {
   static async updateStatus(leadId: string, status: Lead['status'], userId: string) {
-    const updateData: any = { status }
-    
-    // Set timestamps based on status
-    if (status === 'applied') {
-      updateData.applied_at = new Date().toISOString()
-    } else if (status === 'replied') {
-      updateData.replied_at = new Date().toISOString()
-    } else if (status === 'hired') {
-      updateData.hired_at = new Date().toISOString()
+    try {
+      const updateData: any = { status }
+      
+      // Set timestamps based on status
+      const now = new Date().toISOString()
+      if (status === 'applied') {
+        updateData.applied_at = now
+      } else if (status === 'replied') {
+        updateData.replied_at = now
+      } else if (status === 'hired') {
+        updateData.hired_at = now
+      }
+
+      const { data, error } = await supabase
+        .from('user_lead_status')
+        .upsert({
+          lead_id: leadId,
+          user_id: userId,
+          status,
+          updated_at: now
+        }, {
+          onConflict: 'lead_id,user_id'
+        })
+
+      if (error) throw error
+      return data
+    } catch (error) {
+      console.error('Error updating lead status:', error)
+      return null
     }
-
-    const { data, error } = await supabase
-      .from('user_lead_status')
-      .upsert({
-        lead_id: leadId,
-        user_id: userId,
-        status,
-        updated_at: new Date().toISOString()
-      }, {
-        onConflict: 'lead_id,user_id'
-      })
-
-    if (error) throw error
-    return data
   }
 
   static async getUserLeads(userId: string, filters?: {
@@ -449,60 +524,314 @@ export class LeadStatusTracker {
     limit?: number
     offset?: number
   }) {
-    let query = supabase
-      .from('user_lead_status')
-      .select(`
-        *,
-        leads (*)
-      `)
-      .eq('user_id', userId)
-      .order('updated_at', { ascending: false })
+    try {
+      let query = supabase
+        .from('user_lead_status')
+        .select(`
+          *,
+          leads (*)
+        `)
+        .eq('user_id', userId)
+        .order('updated_at', { ascending: false })
 
-    if (filters?.status) {
-      query = query.eq('status', filters.status)
+      if (filters?.status) {
+        query = query.eq('status', filters.status)
+      }
+
+      if (filters?.limit) {
+        query = query.limit(filters.limit)
+      }
+
+      if (filters?.offset) {
+        const limit = filters.limit || 50
+        query = query.range(filters.offset, filters.offset + limit - 1)
+      }
+
+      const { data, error } = await query
+
+      if (error) throw error
+      return data
+    } catch (error) {
+      console.error('Error getting user leads:', error)
+      return []
     }
+  }
 
-    if (filters?.limit) {
-      query = query.limit(filters.limit)
+  static async getLeadStats(userId: string) {
+    try {
+      const { data, error } = await supabase.rpc('get_user_lead_stats', {
+        p_user_id: userId
+      })
+
+      if (error) throw error
+      return data
+    } catch (error) {
+      console.error('Error getting lead stats:', error)
+      return null
     }
-
-    if (filters?.offset) {
-      query = query.range(filters.offset, filters.offset + (filters.limit || 50) - 1)
-    }
-
-    const { data, error } = await query
-
-    if (error) throw error
-    return data
   }
 }
 
 // Analytics Service
 export class AnalyticsService {
   static async getUserAnalytics(userId: string, timeframe: 'day' | 'week' | 'month' | 'year') {
-    const { data, error } = await supabase.rpc('get_user_analytics', {
-      p_user_id: userId,
-      p_timeframe: timeframe
-    })
+    try {
+      const { data, error } = await supabase.rpc('get_user_analytics', {
+        p_user_id: userId,
+        p_timeframe: timeframe
+      })
 
-    if (error) throw error
-    return data
+      if (error) throw error
+      return data
+    } catch (error) {
+      console.error('Error getting user analytics:', error)
+      return null
+    }
   }
 
   static async getPlatformAnalytics() {
-    const { data, error } = await supabase.rpc('get_platform_analytics')
+    try {
+      const { data, error } = await supabase.rpc('get_platform_analytics')
 
-    if (error) throw error
-    return data
+      if (error) throw error
+      return data
+    } catch (error) {
+      console.error('Error getting platform analytics:', error)
+      return null
+    }
   }
 
   static async getSkillDemand() {
-    const { data, error } = await supabase.rpc('get_skill_demand_analytics')
+    try {
+      const { data, error } = await supabase.rpc('get_skill_demand_analytics')
 
-    if (error) throw error
-    return data
+      if (error) throw error
+      return data
+    } catch (error) {
+      console.error('Error getting skill demand:', error)
+      return null
+    }
+  }
+
+  static async getRevenueAnalytics(startDate: string, endDate: string) {
+    try {
+      const { data, error } = await supabase.rpc('get_revenue_analytics', {
+        p_start_date: startDate,
+        p_end_date: endDate
+      })
+
+      if (error) throw error
+      return data
+    } catch (error) {
+      console.error('Error getting revenue analytics:', error)
+      return null
+    }
+  }
+}
+
+// Database Functions (RPC calls for complex operations)
+export class DatabaseFunctions {
+  static async createLead(newLead: Partial<Lead>) {
+    try {
+      const { data, error } = await supabase
+        .from('leads')
+        .insert([{
+          ...newLead,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          telegram_notified: false,
+          email_notified: false
+        }])
+        .select()
+        .single()
+
+      if (error) throw error
+      return data as Lead
+    } catch (error) {
+      console.error('Error creating lead:', error)
+      return null
+    }
+  }
+
+  static async updateLead(leadId: string, updates: Partial<Lead>) {
+    try {
+      const { data, error } = await supabase
+        .from('leads')
+        .update({
+          ...updates,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', leadId)
+        .select()
+        .single()
+
+      if (error) throw error
+      return data as Lead
+    } catch (error) {
+      console.error('Error updating lead:', error)
+      return null
+    }
+  }
+
+  static async deleteLead(leadId: string) {
+    try {
+      const { error } = await supabase
+        .from('leads')
+        .delete()
+        .eq('id', leadId)
+
+      if (error) throw error
+      return true
+    } catch (error) {
+      console.error('Error deleting lead:', error)
+      return false
+    }
+  }
+
+  static async getRecentLeads(limit: number = 50) {
+    try {
+      const { data, error } = await supabase
+        .from('leads')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(limit)
+
+      if (error) throw error
+      return data as Lead[]
+    } catch (error) {
+      console.error('Error getting recent leads:', error)
+      return []
+    }
+  }
+
+  static async searchLeads(query: string, filters?: {
+    minBudget?: number
+    maxBudget?: number
+    skills?: string[]
+    location?: string
+    tier?: string[]
+  }) {
+    try {
+      let supabaseQuery = supabase
+        .from('leads')
+        .select('*')
+        .or(`title.ilike.%${query}%,description.ilike.%${query}%`)
+
+      if (filters?.minBudget) {
+        supabaseQuery = supabaseQuery.gte('budget', filters.minBudget)
+      }
+
+      if (filters?.maxBudget) {
+        supabaseQuery = supabaseQuery.lte('budget', filters.maxBudget)
+      }
+
+      if (filters?.skills && filters.skills.length > 0) {
+        supabaseQuery = supabaseQuery.contains('skills', filters.skills)
+      }
+
+      if (filters?.location) {
+        supabaseQuery = supabaseQuery.ilike('location', `%${filters.location}%`)
+      }
+
+      if (filters?.tier && filters.tier.length > 0) {
+        supabaseQuery = supabaseQuery.in('tier', filters.tier)
+      }
+
+      const { data, error } = await supabaseQuery
+        .order('created_at', { ascending: false })
+        .limit(100)
+
+      if (error) throw error
+      return data as Lead[]
+    } catch (error) {
+      console.error('Error searching leads:', error)
+      return []
+    }
+  }
+}
+
+// Utility functions for common operations
+export const supabaseUtils = {
+  async getUserProfile(userId: string) {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single()
+
+      if (error) throw error
+      return data as UserProfile
+    } catch (error) {
+      console.error('Error getting user profile:', error)
+      return null
+    }
+  },
+
+  async updateUserProfile(userId: string, updates: Partial<UserProfile>) {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .update({
+          ...updates,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', userId)
+        .select()
+        .single()
+
+      if (error) throw error
+      return data as UserProfile
+    } catch (error) {
+      console.error('Error updating user profile:', error)
+      return null
+    }
+  },
+
+  async getUserByEmail(email: string) {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('email', email)
+        .single()
+
+      if (error) throw error
+      return data as UserProfile
+    } catch (error) {
+      console.error('Error getting user by email:', error)
+      return null
+    }
+  },
+
+  async checkIfUserExists(userId: string) {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('id', userId)
+        .single()
+
+      return !error && data !== null
+    } catch (error) {
+      return false
+    }
   }
 }
 
 // Export instances
 export const leadMonitor = new RealTimeLeadMonitor()
+
+// Default exports for easy imports
+export default {
+  supabase,
+  leadMonitor,
+  TelegramBotService,
+  AIPitchService,
+  SubscriptionManager,
+  CreditManager,
+  LeadStatusTracker,
+  AnalyticsService,
+  DatabaseFunctions,
+  supabaseUtils
+}
