@@ -7,7 +7,7 @@ import {
   Rocket, DollarSign, Users, CheckCircle, X, Cpu, Database, 
   Globe, ShieldCheck, Activity, Cpu as Processor, Server, 
   Wifi, WifiOff, AlertTriangle, Brain, Cloud, CloudLightning,
-  BarChart3, Settings, Terminal, Cogs, GitBranch, Layers,
+  BarChart3, Settings, Terminal, Cog, GitBranch, Layers,
   Network, RefreshCw, Play, Pause, StopCircle, GitMerge,
   BrainCircuit, CircuitBoard, Satellite, Radar, Telescope
 } from 'lucide-react';
