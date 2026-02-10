@@ -33,7 +33,8 @@ export const AVAILABLE_SKILLS = [
   'Business Analyst',
   'Sales Executive',
   'Social Media Manager',
-  'E-commerce Specialist'
+  'E-commerce Specialist',
+  'video editing'
 ] as const;
 
 export type SkillType = typeof AVAILABLE_SKILLS[number];
