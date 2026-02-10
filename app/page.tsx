@@ -2,18 +2,18 @@
 
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  useUser, 
-  useCredits, 
-  useSubscription 
-} from './context/UserContext';
+
+// Context aur Hooks (Relative Path use kiya hai build fix karne ke liye)
+import { useUser } from './context/UserContext';
 import useLeads from './hooks/useLeads';
-import SkillSwitcher from '@/components/SkillSwitcher';
-import LeadStatusTracker from '@/components/LeadStatusTracker';
-import JobCard from '@/components/JobCard';
-import AIPitchGenerator from '@/components/AIPitchGenerator';
-import GlobalMap from '@/components/GlobalMap';
-import LiveTicker from '@/components/LiveTicker';
+
+// Components (Relative paths are safer for Vercel Linux environment)
+import SkillSwitcher from '../components/SkillSwitcher';
+import LeadStatusTracker from '../components/LeadStatusTracker';
+import JobCard from '../components/JobCard';
+import AIPitchModal from '../components/AIPitchModal'; // Generator ko Modal se replace kiya
+import GlobalMap from '../components/GlobalMap';
+import LiveTicker from '../components/LiveTicker';
 import {
   Zap,
   Filter,
