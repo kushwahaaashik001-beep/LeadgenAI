@@ -6,8 +6,8 @@ import {
   useUser, 
   useCredits, 
   useSubscription 
-} from '@/context/UserContext';
-import useLeads from '@/hooks/useLeads';
+} from './context/UserContext';
+import useLeads from './hooks/useLeads';
 import SkillSwitcher from '@/components/SkillSwitcher';
 import LeadStatusTracker from '@/components/LeadStatusTracker';
 import JobCard from '@/components/JobCard';
