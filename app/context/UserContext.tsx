@@ -443,7 +443,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
     try {
       await updateProfile({
         is_pro: false,
-        subscription_end_date: null,
+        subscription_end_date: undefined,
       });
 
       // Send notification
