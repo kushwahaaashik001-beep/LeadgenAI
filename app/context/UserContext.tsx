@@ -1,16 +1,16 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 
 // Subscription pricing configuration
 const SUBSCRIPTION_PRICES = {
-  firstTimePro: 199, // First time subscription
-  renewalPro: 599, // Renewal subscription
+  firstTimePro: 199,
+  renewalPro: 599,
 } as const;
 
-// Available skills (20+ skills)
+// Available skills (23 skills)
 export const AVAILABLE_SKILLS = [
   'React Developer',
   'Full Stack Developer',
@@ -34,7 +34,7 @@ export const AVAILABLE_SKILLS = [
   'Sales Executive',
   'Social Media Manager',
   'E-commerce Specialist',
-  'video editing'
+  'Video Editing'
 ] as const;
 
 export type SkillType = typeof AVAILABLE_SKILLS[number];
@@ -48,7 +48,7 @@ export interface UserProfile {
   is_pro: boolean;
   is_first_time_pro: boolean;
   last_credit_reset: string;
-  subscription_end_date?: string;
+  subscription_end_date?: string | null;
   selected_skill: SkillType;
   created_at: string;
   updated_at: string;
@@ -65,43 +65,30 @@ export interface CreditTransaction {
 }
 
 interface UserContextType {
-  // User state
   user: UserProfile | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  
-  // Credits & Subscription
   credits: number;
   isPro: boolean;
   isFirstTimePro: boolean;
   subscriptionEndDate: string | null;
-  
-  // Skill management
   selectedSkill: SkillType;
   availableSkills: readonly SkillType[];
-  
-  // Actions
   login: (email: string, password: string) => Promise<void>;
   signup: (email: string, password: string, fullName: string) => Promise<void>;
   logout: () => Promise<void>;
   updateProfile: (data: Partial<UserProfile>) => Promise<void>;
-  
-  // Credit management
-  deductCredit: (amount?: number) => Promise<void>;
+  deductCredit: (amount?: number) => Promise<boolean>;
   resetDailyCredits: () => Promise<void>;
   checkCreditReset: () => Promise<void>;
-  
-  // Subscription
-  upgradeToPro: () => Promise<void>;
+  upgradeToPro: (paymentMethod?: string) => Promise<void>;
   cancelProSubscription: () => Promise<void>;
   getProPrice: () => number;
-  
-  // Skill management
   setSelectedSkill: (skill: SkillType) => Promise<void>;
-  
-  // Real-time
   subscribeToUserUpdates: () => void;
   unsubscribeFromUserUpdates: () => void;
+  requestNotificationPermission: () => Promise<NotificationPermission>;
+  sendNotification: (title: string, body: string) => void;
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
@@ -109,53 +96,73 @@ const UserContext = createContext<UserContextType | undefined>(undefined);
 export function UserProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [credits, setCredits] = useState(3); // Default 3 free credits
+  const [credits, setCredits] = useState<number>(3);
   const [selectedSkill, setSelectedSkillState] = useState<SkillType>('React Developer');
   const router = useRouter();
+  const pathname = usePathname();
 
   // Initialize user session
   useEffect(() => {
+    let mounted = true;
+
     const initializeUser = async () => {
       try {
         setIsLoading(true);
         
         // Check for existing session
-        const { data: { session } } = await supabase.auth.getSession();
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        
+        if (sessionError) {
+          console.error('Session error:', sessionError);
+          return;
+        }
         
         if (session?.user) {
           await fetchUserProfile(session.user.id);
         } else {
-          // For demo/development, create anonymous user
-          await createAnonymousUser();
+          // For development/demo, check if we're on a public page
+          if (!pathname?.includes('/dashboard') && !pathname?.includes('/pro')) {
+            await createAnonymousUser();
+          }
         }
       } catch (error) {
         console.error('Error initializing user:', error);
+        if (mounted) {
+          setUser(null);
+        }
       } finally {
-        setIsLoading(false);
+        if (mounted) {
+          setIsLoading(false);
+        }
       }
     };
 
     initializeUser();
 
     // Listen for auth changes
-    const { data: authListener } = supabase.auth.onAuthStateChange(
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        if (!mounted) return;
+
         if (session?.user) {
           await fetchUserProfile(session.user.id);
         } else if (event === 'SIGNED_OUT') {
           setUser(null);
           setCredits(3);
+          setSelectedSkillState('React Developer');
         }
       }
     );
 
     return () => {
-      authListener?.subscription.unsubscribe();
+      mounted = false;
+      subscription.unsubscribe();
+      unsubscribeFromUserUpdates();
     };
-  }, []);
+  }, [pathname]);
 
   // Fetch user profile from Supabase
-  const fetchUserProfile = async (userId: string) => {
+  const fetchUserProfile = useCallback(async (userId: string) => {
     try {
       // Fetch user profile
       const { data: profile, error } = await supabase
@@ -164,12 +171,20 @@ export function UserProvider({ children }: { children: ReactNode }) {
         .eq('id', userId)
         .single();
 
-      if (error) throw error;
+      if (error) {
+        if (error.code === 'PGRST116') {
+          // Profile doesn't exist, create one
+          await createNewProfile(userId);
+          return;
+        }
+        throw error;
+      }
 
       if (profile) {
-        setUser(profile);
-        setCredits(profile.credits);
-        setSelectedSkillState(profile.selected_skill || 'React Developer');
+        const typedProfile = profile as UserProfile;
+        setUser(typedProfile);
+        setCredits(typedProfile.credits);
+        setSelectedSkillState(typedProfile.selected_skill || 'React Developer');
         
         // Check if daily credits need reset
         await checkCreditReset();
@@ -177,13 +192,46 @@ export function UserProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error('Error fetching user profile:', error);
     }
+  }, []);
+
+  // Create new profile for existing auth user
+  const createNewProfile = async (userId: string) => {
+    try {
+      const { data: authUser } = await supabase.auth.getUser();
+      
+      if (!authUser.user) throw new Error('No auth user found');
+
+      const newProfile = {
+        id: userId,
+        email: authUser.user.email!,
+        full_name: authUser.user.user_metadata?.full_name || '',
+        credits: 3,
+        is_pro: false,
+        is_first_time_pro: true,
+        last_credit_reset: new Date().toISOString(),
+        subscription_end_date: null,
+        selected_skill: 'React Developer',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
+      const { error } = await supabase
+        .from('profiles')
+        .insert([newProfile]);
+
+      if (error) throw error;
+
+      setUser(newProfile as UserProfile);
+      setCredits(3);
+    } catch (error) {
+      console.error('Error creating new profile:', error);
+    }
   };
 
   // Create anonymous user for demo
   const createAnonymousUser = async () => {
     try {
-      // Generate anonymous user ID
-      const anonymousId = `anon_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const anonymousId = `anon_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
       
       const newUser: UserProfile = {
         id: anonymousId,
@@ -192,6 +240,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
         is_pro: false,
         is_first_time_pro: true,
         last_credit_reset: new Date().toISOString(),
+        subscription_end_date: null,
         selected_skill: 'React Developer',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -217,7 +266,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
       router.push('/dashboard');
     } catch (error: any) {
       console.error('Login error:', error.message);
-      throw error;
+      throw new Error(error.message || 'Login failed');
     }
   };
 
@@ -236,34 +285,15 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
       if (error) throw error;
 
-      // Create user profile in profiles table
+      // Profile will be created via database trigger or in fetchUserProfile
       if (data.user) {
-        const newProfile = {
-          id: data.user.id,
-          email: data.user.email!,
-          full_name: fullName,
-          credits: 3,
-          is_pro: false,
-          is_first_time_pro: true,
-          last_credit_reset: new Date().toISOString(),
-          selected_skill: 'React Developer',
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        };
-
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .insert([newProfile]);
-
-        if (profileError) throw profileError;
-
-        setUser(newProfile as UserProfile);
+        await fetchUserProfile(data.user.id);
       }
 
       router.push('/dashboard');
     } catch (error: any) {
       console.error('Signup error:', error.message);
-      throw error;
+      throw new Error(error.message || 'Signup failed');
     }
   };
 
@@ -273,10 +303,11 @@ export function UserProvider({ children }: { children: ReactNode }) {
       await supabase.auth.signOut();
       setUser(null);
       setCredits(3);
+      setSelectedSkillState('React Developer');
       router.push('/');
     } catch (error: any) {
       console.error('Logout error:', error.message);
-      throw error;
+      throw new Error(error.message || 'Logout failed');
     }
   };
 
@@ -306,15 +337,24 @@ export function UserProvider({ children }: { children: ReactNode }) {
       }
     } catch (error: any) {
       console.error('Update profile error:', error.message);
-      throw error;
+      throw new Error(error.message || 'Update profile failed');
     }
   };
 
   // Deduct credit from user
-  const deductCredit = async (amount: number = 1) => {
+  const deductCredit = async (amount: number = 1): Promise<boolean> => {
     if (!user) throw new Error('No user logged in');
 
-    const newCredits = Math.max(0, credits - amount);
+    if (user.is_pro) {
+      // Pro users have unlimited credits for lead viewing
+      return true;
+    }
+
+    if (credits < amount) {
+      throw new Error('Insufficient credits. Please upgrade to Pro.');
+    }
+
+    const newCredits = credits - amount;
     
     try {
       // Update credits in database
@@ -323,13 +363,14 @@ export function UserProvider({ children }: { children: ReactNode }) {
       // Log credit transaction
       await logCreditTransaction({
         user_id: user.id,
-        type: user.is_pro ? 'PRO_USAGE' : 'FREE_DAILY',
+        type: 'FREE_DAILY',
         amount: -amount,
         balance_after: newCredits,
-        description: `Credit used for lead generation - Skill: ${selectedSkill}`,
+        description: `Credit used for ${selectedSkill} lead generation`,
       });
 
       setCredits(newCredits);
+      return true;
     } catch (error) {
       console.error('Error deducting credit:', error);
       throw error;
@@ -358,7 +399,11 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
     const now = new Date();
     const lastReset = new Date(user.last_credit_reset);
-    const isNewDay = now.toDateString() !== lastReset.toDateString();
+    
+    // Check if it's a new day (timezone aware)
+    const isNewDay = now.getDate() !== lastReset.getDate() || 
+                    now.getMonth() !== lastReset.getMonth() || 
+                    now.getFullYear() !== lastReset.getFullYear();
 
     if (isNewDay) {
       try {
@@ -386,12 +431,11 @@ export function UserProvider({ children }: { children: ReactNode }) {
   // Check and reset credits if needed
   const checkCreditReset = async () => {
     if (!user || user.is_pro) return;
-
     await resetDailyCredits();
   };
 
   // Upgrade to Pro subscription
-  const upgradeToPro = async () => {
+  const upgradeToPro = async (paymentMethod: string = 'demo') => {
     if (!user) throw new Error('No user logged in');
 
     const price = getProPrice();
@@ -399,16 +443,21 @@ export function UserProvider({ children }: { children: ReactNode }) {
     subscriptionEnd.setMonth(subscriptionEnd.getMonth() + 1); // 1 month subscription
 
     try {
-      // In production, integrate with payment gateway (Razorpay/Stripe)
-      console.log(`Processing payment of ₹${price} for Pro subscription`);
+      // TODO: Integrate with actual payment gateway (Razorpay/Stripe)
+      console.log(`Processing ${paymentMethod} payment of ₹${price} for Pro subscription`);
       
+      // Simulate payment processing
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
       // Update user profile
-      await updateProfile({
+      const updatedProfile = {
         is_pro: true,
         is_first_time_pro: false,
         subscription_end_date: subscriptionEnd.toISOString(),
         credits: user.credits + 50, // Add bonus credits
-      });
+      };
+
+      await updateProfile(updatedProfile);
 
       // Log transaction
       await logCreditTransaction({
@@ -420,19 +469,14 @@ export function UserProvider({ children }: { children: ReactNode }) {
       });
 
       // Send notification
-      if (typeof window !== 'undefined' && 'Notification' in window) {
-        if (Notification.permission === 'granted') {
-          new Notification('🎉 Welcome to Pro!', {
-            body: 'You now have access to premium features including AI Pitch and real-time notifications!',
-            icon: '/icon.png',
-          });
-        }
-      }
+      sendNotification('🎉 Welcome to Pro!', 
+        'You now have access to premium features including AI Pitch and real-time notifications!');
 
+      // Redirect to dashboard
       router.push('/dashboard');
     } catch (error: any) {
       console.error('Upgrade error:', error.message);
-      throw error;
+      throw new Error(error.message || 'Upgrade failed');
     }
   };
 
@@ -443,26 +487,20 @@ export function UserProvider({ children }: { children: ReactNode }) {
     try {
       await updateProfile({
         is_pro: false,
-        subscription_end_date: undefined,
+        subscription_end_date: null,
       });
 
-      // Send notification
-      if (typeof window !== 'undefined' && 'Notification' in window) {
-        if (Notification.permission === 'granted') {
-          new Notification('Subscription Cancelled', {
-            body: 'Your Pro subscription has been cancelled. You will revert to free tier at the end of your billing period.',
-            icon: '/icon.png',
-          });
-        }
-      }
+      sendNotification('Subscription Cancelled', 
+        'Your Pro subscription has been cancelled. You will revert to free tier.');
+
     } catch (error: any) {
       console.error('Cancel subscription error:', error.message);
-      throw error;
+      throw new Error(error.message || 'Cancel subscription failed');
     }
   };
 
   // Get current Pro price
-  const getProPrice = () => {
+  const getProPrice = (): number => {
     if (!user) return SUBSCRIPTION_PRICES.firstTimePro;
     
     return user.is_first_time_pro 
@@ -476,16 +514,49 @@ export function UserProvider({ children }: { children: ReactNode }) {
     
     if (user) {
       try {
-        await supabase
-          .from('profiles')
-          .update({ 
-            selected_skill: skill,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', user.id);
+        await updateProfile({ selected_skill: skill });
       } catch (error) {
         console.error('Error updating skill:', error);
       }
+    }
+  };
+
+  // Request notification permission
+  const requestNotificationPermission = async (): Promise<NotificationPermission> => {
+    if (typeof window === 'undefined' || !('Notification' in window)) {
+      return 'denied';
+    }
+
+    if (Notification.permission === 'granted') {
+      return 'granted';
+    }
+
+    if (Notification.permission === 'denied') {
+      return 'denied';
+    }
+
+    const permission = await Notification.requestPermission();
+    return permission;
+  };
+
+  // Send notification
+  const sendNotification = (title: string, body: string) => {
+    if (typeof window === 'undefined' || !('Notification' in window)) return;
+
+    if (Notification.permission === 'granted') {
+      new Notification(title, {
+        body,
+        icon: '/icon.png',
+      });
+    } else if (Notification.permission !== 'denied') {
+      Notification.requestPermission().then(permission => {
+        if (permission === 'granted') {
+          new Notification(title, {
+            body,
+            icon: '/icon.png',
+          });
+        }
+      });
     }
   };
 
@@ -494,7 +565,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
     if (!user) return;
 
     const channel = supabase
-      .channel('user-updates')
+      .channel(`user-updates-${user.id}`)
       .on(
         'postgres_changes',
         {
@@ -508,16 +579,10 @@ export function UserProvider({ children }: { children: ReactNode }) {
           setUser(updatedUser);
           setCredits(updatedUser.credits);
           
-          // Send notification for important updates
-          if (updatedUser.is_pro && !user.is_pro) {
-            if (typeof window !== 'undefined' && 'Notification' in window) {
-              if (Notification.permission === 'granted') {
-                new Notification('Pro Activated! 🚀', {
-                  body: 'Your Pro subscription is now active!',
-                  icon: '/icon.png',
-                });
-              }
-            }
+          // Send notification for pro activation
+          if (updatedUser.is_pro && user && !user.is_pro) {
+            sendNotification('Pro Activated! 🚀', 
+              'Your Pro subscription is now active! Enjoy premium features.');
           }
         }
       )
@@ -528,56 +593,35 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
   // Unsubscribe from updates
   const unsubscribeFromUserUpdates = () => {
-    supabase.removeChannel('user-updates');
+    supabase.removeAllChannels();
   };
 
-  // Request notification permission
-  useEffect(() => {
-    if (typeof window !== 'undefined' && 'Notification' in window) {
-      if (Notification.permission === 'default') {
-        Notification.requestPermission();
-      }
-    }
-  }, []);
-
+  // Context value
   const value: UserContextType = {
-    // User state
     user,
     isLoading,
     isAuthenticated: !!user,
-    
-    // Credits & Subscription
     credits,
     isPro: user?.is_pro || false,
     isFirstTimePro: user?.is_first_time_pro || true,
     subscriptionEndDate: user?.subscription_end_date || null,
-    
-    // Skill management
     selectedSkill,
     availableSkills: AVAILABLE_SKILLS,
-    
-    // Actions
     login,
     signup,
     logout,
     updateProfile,
-    
-    // Credit management
     deductCredit,
     resetDailyCredits,
     checkCreditReset,
-    
-    // Subscription
     upgradeToPro,
     cancelProSubscription,
     getProPrice,
-    
-    // Skill management
     setSelectedSkill,
-    
-    // Real-time
     subscribeToUserUpdates,
     unsubscribeFromUserUpdates,
+    requestNotificationPermission,
+    sendNotification,
   };
 
   return (
@@ -599,19 +643,19 @@ export function useUser() {
 export function useCredits() {
   const { credits, deductCredit, user } = useUser();
   
-  const canUseCredits = (amount: number = 1) => {
+  const canUseCredits = (amount: number = 1): boolean => {
     if (!user) return false;
-    if (user.is_pro) return true; // Pro users have unlimited access
+    if (user.is_pro) return true;
     return credits >= amount;
   };
 
-  const useCredits = async (amount: number = 1) => {
+  const useCredits = async (amount: number = 1): Promise<boolean> => {
     if (!canUseCredits(amount)) {
       throw new Error('Insufficient credits');
     }
     
     if (!user?.is_pro) {
-      await deductCredit(amount);
+      return await deductCredit(amount);
     }
     
     return true;
@@ -640,5 +684,16 @@ export function useSubscription() {
     subscriptionEndDate,
     upgradeToPro,
     cancelProSubscription,
+  };
+}
+
+// Custom hook for skill management
+export function useSkills() {
+  const { selectedSkill, setSelectedSkill, availableSkills } = useUser();
+  
+  return {
+    selectedSkill,
+    setSelectedSkill,
+    availableSkills,
   };
 }
