@@ -1058,6 +1058,7 @@ export default function DashboardPage() {
           lead={selectedLeadForPitch}
           isOpen={showAIPitchModal}
           onClose={() => setShowAIPitchModal(false)}
+          pitch="" 
         />
       )}
     </div>
