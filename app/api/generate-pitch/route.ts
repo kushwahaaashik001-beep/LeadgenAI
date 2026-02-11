@@ -223,12 +223,13 @@ export async function GET(request: NextRequest) {
   );
 }
 
-// Clean up rate limit store periodically
+// Is block ko dhundo aur aise badal do:
 setInterval(() => {
   const now = Date.now();
-  for (const [key, value] of rateLimitStore.entries()) {
+  // Array.from use karne se TypeScript khush ho jata hai
+  Array.from(rateLimitStore.entries()).forEach(([key, value]) => {
     if (now > value.resetTime + 5 * 60 * 1000) { // 5 minutes after reset
       rateLimitStore.delete(key);
     }
-  }
-}, 10 * 60 * 1000); // Every 10 minutes
+  });
+}, 5 * 60 * 1000); // Clean up every 5 minutes
