@@ -196,8 +196,9 @@ export default function LeadStatusTracker({ leads }: LeadStatusTrackerProps) {
 
       {/* Main Stats */}
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-8">
-        {STATUS_ORDER.map((status, index) => {
-          const Icon = STATUS_COLORS[status].icon;
+        {STATUS_ORDER.map((status: string, index) => {
+  const currentStatus = status as keyof typeof STATUS_COLORS;
+  const Icon = STATUS_COLORS[currentStatus].icon
           const count = statusCounts[status] || 0;
           const percentage = totalLeads > 0 ? (count / totalLeads) * 100 : 0;
           const isActive = activeStatus === status || (!activeStatus && index === 0);
