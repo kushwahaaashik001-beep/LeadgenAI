@@ -234,7 +234,7 @@ export default function JobCard({
                   </button>
                 )}
                 
-                {onGeneratePitch && (
+                {true && (
                   <button
                     onClick={handleGeneratePitch}
                     disabled={isGeneratingPitch}
