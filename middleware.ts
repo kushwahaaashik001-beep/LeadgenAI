@@ -185,7 +185,7 @@ async function checkRateLimit(ip: string, req: NextRequest) {
   const windowStart = now - RATE_LIMIT.windowMs;
 
   // Clean up old entries
-  for (const [key, value] of rateLimitMap.entries()) {
+  for (const [key, value] of Array.from(rateLimitMap.entries())) {
     if (value.resetTime < windowStart) {
       rateLimitMap.delete(key);
     }
