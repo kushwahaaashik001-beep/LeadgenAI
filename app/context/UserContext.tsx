@@ -257,7 +257,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
         if (profileError) throw profileError;
 
-        setUser(newProfile);
+        setUser(newProfile as UserProfile);
       }
 
       router.push('/dashboard');
