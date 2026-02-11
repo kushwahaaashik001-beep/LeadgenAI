@@ -1042,7 +1042,7 @@ export default function DashboardPage() {
                 </p>
               </div>
               <button
-                onClick={upgradeToPro}
+                onClick={() => upgradeToPro()}
                 className="ml-2 px-4 py-1.5 bg-gradient-to-r from-amber-500 to-orange-500 text-white text-sm font-semibold rounded-lg hover:opacity-90 transition-opacity whitespace-nowrap"
               >
                 Upgrade Now
