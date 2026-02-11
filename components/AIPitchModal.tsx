@@ -3,43 +3,41 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-// Context: components folder se bahar niklo (..) aur app/context mein jao
+// Context: Ek hi baar import karein
 import { useUser } from '../app/context/UserContext';
 
-// Icons aur baaki cheezein
-import { X, Sparkles, Send, Copy, Check } from 'lucide-react';
-import { toast } from 'react-hot-toast';
-import { supabase } from '../lib/supabase'; // Agar lib folder root mein hai
+// Icons: Saare icons ek hi list mein (Double entries hata di hain)
 import { 
   X, 
+  Sparkles, 
+  Send, 
   Copy, 
   Check, 
-  Sparkles, 
   Zap, 
   Target, 
   Briefcase, 
   MapPin, 
   Clock, 
-  Download,
-  Share2,
-  Edit,
-  RefreshCw,
-  Volume2,
-  Eye,
-  EyeOff,
-  Save,
-  History,
-  TrendingUp,
-  Users,
-  Award,
-  MessageSquare,
-  ThumbsUp,
-  Send,
-  Star
+  Download, 
+  Share2, 
+  Edit, 
+  RefreshCw, 
+  Volume2, 
+  Eye, 
+  EyeOff, 
+  Save, 
+  History, 
+  TrendingUp, 
+  Users, 
+  Award, 
+  MessageSquare, 
+  ThumbsUp, 
+  Star 
 } from 'lucide-react';
-import { Lead } from '@/app/hooks/useLeads';
-import { useUser } from '@/context/UserContext';
+
 import { toast } from 'react-hot-toast';
+import { supabase } from '../lib/supabase';
+import { Lead } from '../app/hooks/useLeads'; // Iska path bhi relative kar diya
 
 interface AIPitchModalProps {
   isOpen: boolean;
