@@ -2,6 +2,14 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+
+// Context: components folder se bahar niklo (..) aur app/context mein jao
+import { useUser } from '../app/context/UserContext';
+
+// Icons aur baaki cheezein
+import { X, Sparkles, Send, Copy, Check } from 'lucide-react';
+import { toast } from 'react-hot-toast';
+import { supabase } from '../lib/supabase'; // Agar lib folder root mein hai
 import { 
   X, 
   Copy, 
