@@ -845,7 +845,7 @@ export default function DashboardPage() {
 
                 {!isPro ? (
                   <button
-                    onClick={upgradeToPro}
+                    onClick={() => upgradeToPro()}
                     className="w-full py-3.5 bg-gradient-to-r from-purple-600 via-pink-600 to-orange-600 text-white font-semibold rounded-xl hover:opacity-90 transition-all shadow-lg shadow-purple-500/25 group"
                   >
                     <span className="flex items-center justify-center">
