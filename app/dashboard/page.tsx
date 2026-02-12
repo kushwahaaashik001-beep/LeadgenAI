@@ -24,7 +24,7 @@ const dummyLeads: Lead[] = [
     application_url: 'https://example.com/apply',
     status: 'new',
     match_score: 92,
-    company_logo: null,
+    company_logo: undefined,
     type: 'Freelance',
     skill: 'Video Editing',
     notes: ''
