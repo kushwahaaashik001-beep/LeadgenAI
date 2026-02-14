@@ -17,36 +17,58 @@ import {
 import { toast } from 'react-hot-toast';
 import { Lead } from '@/app/hooks/useLeads';
 
+// ✅ Flexible props – all optional, accept both job/lead
 export interface JobCardProps {
-  lead: Lead;
-  onGeneratePitch: (lead: Lead) => Promise<void>;
-  creditsRemaining?: number; // 0 = no credits, show upgrade prompt
+  job?: any;                     // for old pages
+  lead?: Lead;                    // for new dashboard
+  onGeneratePitch?: (lead: Lead) => Promise<void>; // optional
+  creditsRemaining?: number;
+  // Old callbacks – made optional
+  onContacted?: (id: string) => Promise<void>;
+  onInterview?: (id: string) => Promise<void>;
+  onRejected?: (id: string) => Promise<void>;
+  onAccepted?: (id: string) => Promise<void>;
+  onAddNote?: (id: string, note: string) => Promise<void>;
+  viewMode?: 'grid' | 'list';
 }
 
 export default function JobCard({
+  job,
   lead,
   onGeneratePitch,
-  creditsRemaining = 3
+  creditsRemaining = 3,
+  // Accept old callbacks but don't use them (to avoid breaking)
+  onContacted,
+  onInterview,
+  onRejected,
+  onAccepted,
+  onAddNote,
+  viewMode = 'grid'
 }: JobCardProps) {
+  // Determine which data object to use
+  const data = lead || job;
+  if (!data) return null; // safeguard
+
+  // Local state
   const [isGeneratingPitch, setIsGeneratingPitch] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
 
   // ----- Helper Functions -----
-  const jobType = ('type' in lead ? (lead as any).type : null) || 'Full-time';
+  const jobType = ('type' in data ? data.type : null) || 'Full-time';
 
   const formatSalary = () => {
-    if (!lead.salary_min && !lead.salary_max) return 'Not specified';
-    if (lead.salary_min && lead.salary_max) {
-      return `${lead.salary_currency} ${lead.salary_min.toLocaleString()} - ${lead.salary_max.toLocaleString()}`;
+    if (!data.salary_min && !data.salary_max) return 'Not specified';
+    if (data.salary_min && data.salary_max) {
+      return `${data.salary_currency} ${data.salary_min.toLocaleString()} - ${data.salary_max.toLocaleString()}`;
     }
-    if (lead.salary_min) {
-      return `${lead.salary_currency} ${lead.salary_min.toLocaleString()}+`;
+    if (data.salary_min) {
+      return `${data.salary_currency} ${data.salary_min.toLocaleString()}+`;
     }
-    return `${lead.salary_currency} Up to ${lead.salary_max!.toLocaleString()}`;
+    return `${data.salary_currency} Up to ${data.salary_max!.toLocaleString()}`;
   };
 
   const getDaysAgo = () => {
-    const date = new Date(lead.posted_date);
+    const date = new Date(data.posted_date);
     const now = new Date();
     const diffDays = Math.ceil((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
     if (diffDays === 0) return 'Today';
@@ -58,11 +80,10 @@ export default function JobCard({
 
   // ----- Handlers -----
   const handleGeneratePitch = async () => {
-    if (isGeneratingPitch) return;
+    if (isGeneratingPitch || !onGeneratePitch) return;
     try {
       setIsGeneratingPitch(true);
-      await onGeneratePitch(lead);
-      // Parent handles credit deduction & upgrade modal
+      await onGeneratePitch(data); // pass the lead object
     } catch (error) {
       console.error('Pitch generation failed:', error);
       toast.error('Failed to generate pitch');
@@ -101,10 +122,10 @@ export default function JobCard({
       <div className="flex items-start justify-between mb-3">
         <div className="flex items-center gap-3">
           {/* Company Logo / Placeholder */}
-          {lead.company_logo ? (
+          {data.company_logo ? (
             <img
-              src={lead.company_logo}
-              alt={lead.company}
+              src={data.company_logo}
+              alt={data.company}
               className="w-10 h-10 rounded-lg object-cover ring-1 ring-slate-200 group-hover:ring-blue-200 transition-all"
             />
           ) : (
@@ -115,18 +136,18 @@ export default function JobCard({
 
           <div>
             <h3 className="text-base font-bold text-slate-900 group-hover:text-blue-600 transition-colors line-clamp-1">
-              {lead.title}
+              {data.title}
             </h3>
             <p className="text-sm text-slate-500 flex items-center gap-1 mt-0.5">
               <Building className="w-3.5 h-3.5" />
-              <span className="truncate">{lead.company}</span>
+              <span className="truncate">{data.company}</span>
             </p>
           </div>
         </div>
 
         {/* Match Score & New Badge */}
         <div className="flex flex-col items-end gap-1.5">
-          {lead.status === 'new' && (
+          {data.status === 'new' && (
             <span className="inline-flex items-center px-2 py-0.5 bg-green-100 text-green-700 text-[10px] font-semibold rounded-full border border-green-200">
               <span className="w-1.5 h-1.5 bg-green-500 rounded-full mr-1 animate-pulse" />
               NEW
@@ -134,7 +155,7 @@ export default function JobCard({
           )}
           <div className="flex items-center gap-1 px-2 py-1 bg-amber-50 rounded-lg border border-amber-100">
             <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
-            <span className="text-xs font-bold text-amber-700">{lead.match_score}%</span>
+            <span className="text-xs font-bold text-amber-700">{data.match_score}%</span>
           </div>
         </div>
       </div>
@@ -143,7 +164,7 @@ export default function JobCard({
       <div className="grid grid-cols-2 gap-2 mb-4">
         <div className="flex items-center gap-2 text-xs text-slate-600 bg-slate-50 px-3 py-2 rounded-lg border border-slate-100">
           <MapPin className="w-3.5 h-3.5 text-slate-400" />
-          <span className="truncate">{lead.location || 'Remote'}</span>
+          <span className="truncate">{data.location || 'Remote'}</span>
         </div>
         <div className="flex items-center gap-2 text-xs text-slate-600 bg-slate-50 px-3 py-2 rounded-lg border border-slate-100">
           <DollarSign className="w-3.5 h-3.5 text-emerald-500" />
@@ -161,7 +182,7 @@ export default function JobCard({
 
       {/* ----- Requirements Pills ----- */}
       <div className="flex flex-wrap gap-1.5 mb-3">
-        {lead.requirements.slice(0, 3).map((req, idx) => (
+        {data.requirements?.slice(0, 3).map((req: string, idx: number) => (
           <span
             key={idx}
             className="px-2.5 py-1 bg-slate-100 text-slate-700 rounded-lg text-xs border border-slate-200"
@@ -169,16 +190,16 @@ export default function JobCard({
             {req}
           </span>
         ))}
-        {lead.requirements.length > 3 && (
+        {data.requirements?.length > 3 && (
           <span className="px-2.5 py-1 bg-slate-100 text-slate-500 rounded-lg text-xs border border-slate-200">
-            +{lead.requirements.length - 3}
+            +{data.requirements.length - 3}
           </span>
         )}
       </div>
 
       {/* ----- Description ----- */}
       <p className="text-sm text-slate-600 leading-relaxed line-clamp-2 mb-5">
-        {lead.description}
+        {data.description}
       </p>
 
       {/* ----- Action Buttons ----- */}
@@ -186,7 +207,7 @@ export default function JobCard({
         {/* PRIMARY – Generate AI Pitch (Revenue Driver) */}
         <button
           onClick={handleGeneratePitch}
-          disabled={isGeneratingPitch}
+          disabled={isGeneratingPitch || !onGeneratePitch}
           className={`
             flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm
             transition-all duration-200 active:scale-[0.98]
@@ -217,7 +238,7 @@ export default function JobCard({
 
         {/* SECONDARY – Apply (External) */}
         <a
-          href={lead.application_url}
+          href={data.application_url}
           target="_blank"
           rel="noopener noreferrer"
           className="flex items-center justify-center gap-1.5 px-4 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl font-medium text-sm hover:bg-slate-50 hover:border-slate-300 transition-colors shadow-sm"
