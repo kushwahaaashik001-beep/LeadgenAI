@@ -10,7 +10,8 @@ import SkillSwitcher from '@/components/SkillSwitcher';
 import { Lead } from '@/app/hooks/useLeads';
 import { supabase, updateUserCredits, logUserActivity } from '@/lib/supabase';
 
-const DEMO_USER_ID = '00000000-0000-0000-0000-000000000000'; // Replace with actual auth
+// TODO: Replace with actual authenticated user ID
+const DEMO_USER_ID = '00000000-0000-0000-0000-000000000000';
 
 export default function DashboardPage() {
   const [isProModalOpen, setIsProModalOpen] = useState(false);
@@ -23,31 +24,44 @@ export default function DashboardPage() {
   useEffect(() => {
     const fetchUserAndLeads = async () => {
       setLoading(true);
+      try {
+        // Get user credits
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('credits')
+          .eq('id', DEMO_USER_ID)
+          .single();
 
-      // Get user credits
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('credits')
-        .eq('id', DEMO_USER_ID)
-        .single();
+        if (profileError) {
+          console.error('Profile fetch error:', profileError);
+          // Agar error ho toh credits ko 0 mat karo, default 3 hi rahega ya previous value
+          // Hum yahan kuch nahi karte, credits already 3 hai
+        } else if (profile) {
+          setCredits(profile.credits);
+        }
 
-      if (!profileError && profile) {
-        setCredits(profile.credits);
+        // Fetch leads (safely)
+        let query = supabase.from('leads').select('*').order('scraped_at', { ascending: false });
+        if (selectedSkill !== 'all') {
+          query = query.eq('skill', selectedSkill);
+        }
+        const { data: leadsData, error: leadsError } = await query;
+
+        if (leadsError) {
+          console.error('Leads fetch error:', leadsError);
+          toast.error('Failed to load leads');
+          setLeads([]); // ensure leads is always an array
+        } else {
+          // Agar leadsData null hai toh empty array set karo
+          setLeads(leadsData ?? []);
+        }
+      } catch (err) {
+        console.error('Unexpected error in fetchUserAndLeads:', err);
+        toast.error('Something went wrong');
+        setLeads([]);
+      } finally {
+        setLoading(false);
       }
-
-      // Fetch leads based on selected skill
-      let query = supabase.from('leads').select('*').order('scraped_at', { ascending: false });
-      if (selectedSkill !== 'all') {
-        query = query.eq('skill', selectedSkill);
-      }
-      const { data: leadsData, error: leadsError } = await query;
-
-      if (!leadsError) {
-        setLeads(leadsData as Lead[]);
-      } else {
-        toast.error('Failed to load leads');
-      }
-      setLoading(false);
     };
 
     fetchUserAndLeads();
@@ -55,8 +69,9 @@ export default function DashboardPage() {
 
   // Real-time subscription for new leads
   useEffect(() => {
+    // Channel name dynamic banaya taaki filter change par naya channel bane
     const channel = supabase
-      .channel('dashboard-leads')
+      .channel(`dashboard-leads-${selectedSkill}`)
       .on(
         'postgres_changes',
         {
@@ -99,11 +114,12 @@ export default function DashboardPage() {
       await new Promise(resolve => setTimeout(resolve, 1000));
       toast.success(`✨ AI Pitch generated! (1 credit used, ${newCredits} left)`);
     } catch (error) {
+      console.error('Pitch generation error:', error);
       toast.error('Failed to generate pitch');
     }
   };
 
-  // Stats (simplified)
+  // Stats
   const totalLeads = leads.length;
   const creditsUsed = 3 - credits;
   const estimatedRevenue = creditsUsed * 5;
@@ -118,15 +134,24 @@ export default function DashboardPage() {
         <div className="mb-8 grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 flex items-center gap-4">
             <div className="p-3 bg-blue-100 rounded-xl"><Zap className="w-6 h-6 text-blue-600" /></div>
-            <div><p className="text-sm text-slate-600">Credits Remaining</p><p className="text-2xl font-bold text-slate-900">{credits} / 3</p></div>
+            <div>
+              <p className="text-sm text-slate-600">Credits Remaining</p>
+              <p className="text-2xl font-bold text-slate-900">{credits} / 3</p>
+            </div>
           </div>
           <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 flex items-center gap-4">
             <div className="p-3 bg-green-100 rounded-xl"><TrendingUp className="w-6 h-6 text-green-600" /></div>
-            <div><p className="text-sm text-slate-600">Leads Available</p><p className="text-2xl font-bold text-slate-900">{totalLeads}</p></div>
+            <div>
+              <p className="text-sm text-slate-600">Leads Available</p>
+              <p className="text-2xl font-bold text-slate-900">{totalLeads}</p>
+            </div>
           </div>
           <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 flex items-center gap-4">
             <div className="p-3 bg-amber-100 rounded-xl"><Crown className="w-6 h-6 text-amber-600" /></div>
-            <div><p className="text-sm text-slate-600">Est. Revenue</p><p className="text-2xl font-bold text-slate-900">${estimatedRevenue}</p></div>
+            <div>
+              <p className="text-sm text-slate-600">Est. Revenue</p>
+              <p className="text-2xl font-bold text-slate-900">${estimatedRevenue}</p>
+            </div>
           </div>
         </div>
 
@@ -135,13 +160,22 @@ export default function DashboardPage() {
           <aside className="w-full lg:w-1/4">
             <div className="sticky top-20 space-y-4">
               <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><span>🎯</span> Filter by Skill</h3>
+                <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
+                  <span>🎯</span> Filter by Skill
+                </h3>
                 <SkillSwitcher selectedSkill={selectedSkill} onSkillChange={setSelectedSkill} />
-                <p className="text-xs text-slate-500 mt-4">Showing {leads.length} {leads.length === 1 ? 'lead' : 'leads'}</p>
+                <p className="text-xs text-slate-500 mt-4">
+                  Showing {leads.length} {leads.length === 1 ? 'lead' : 'leads'}
+                </p>
               </div>
               <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-5 rounded-2xl border border-blue-100">
-                <h4 className="font-semibold text-slate-800 flex items-center gap-2 mb-2"><Sparkles className="w-4 h-4 text-blue-600" /> Pro Tip</h4>
-                <p className="text-sm text-slate-600">Use AI Pitch to stand out. Pro users get <span className="font-bold text-blue-600">50 pitches/month</span> and <span className="font-bold">10‑sec alerts</span>.</p>
+                <h4 className="font-semibold text-slate-800 flex items-center gap-2 mb-2">
+                  <Sparkles className="w-4 h-4 text-blue-600" /> Pro Tip
+                </h4>
+                <p className="text-sm text-slate-600">
+                  Use AI Pitch to stand out. Pro users get <span className="font-bold text-blue-600">50 pitches/month</span> and{' '}
+                  <span className="font-bold">10‑sec alerts</span>.
+                </p>
               </div>
             </div>
           </aside>
@@ -158,7 +192,9 @@ export default function DashboardPage() {
             </div>
 
             {loading ? (
-              <div className="flex justify-center py-20"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" /></div>
+              <div className="flex justify-center py-20">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" />
+              </div>
             ) : leads.length === 0 ? (
               <div className="bg-white rounded-2xl p-12 text-center border border-slate-200">
                 <p className="text-slate-500">No leads found for this skill. Try another filter.</p>
