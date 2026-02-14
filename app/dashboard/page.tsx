@@ -36,7 +36,7 @@ export default function DashboardPage() {
       }
 
       // Fetch leads based on selected skill
-      let query = supabase.from('leads').select('*').order('posted_date', { ascending: false });
+      let query = supabase.from('leads').select('*').order('scraped_at', { ascending: false });
       if (selectedSkill !== 'all') {
         query = query.eq('skill', selectedSkill);
       }
