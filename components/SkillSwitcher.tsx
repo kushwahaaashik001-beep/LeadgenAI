@@ -1,500 +1,183 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  useUser, 
-  AVAILABLE_SKILLS, 
-  type SkillType 
-} from '../app/context/UserContext';
-import { 
-  Search, 
-  Filter, 
-  Zap, 
-  TrendingUp, 
-  Star, 
-  Clock, 
-  Check,
-  X,
-  ChevronRight,
-  Target,
-  Briefcase,
-  Code,
-  Palette,
-  BarChart,
-  Globe,
-  Smartphone,
-  Shield,
-  Cloud,
-  Database,
-  MessageSquare,
-  ShoppingBag,
-  Camera,
-  Music,
-  Gamepad2,
-  TestTube,
-  Truck,
-  Heart,
-  Cpu,
-  Video
-} from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { toast } from 'react-hot-toast';
+import { Zap, TrendingUp, Crown, Sparkles } from 'lucide-react';
+import Navbar from '@/components/Navbar';
+import UpgradeModal from '@/components/UpgradeModal';
+import JobCard from '@/components/JobCard';
+import SkillSwitcher from '@/components/SkillSwitcher';
+import { Lead } from '@/app/hooks/useLeads';
+import { supabase, updateUserCredits, logUserActivity } from '@/lib/supabase';
 
-// Custom Brain icon component
-const Brain = (props: any) => (
-  <svg {...props} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5z" />
-    <path d="M12 9v6" />
-    <path d="M9 12h6" />
-  </svg>
-);
+const DEMO_USER_ID = '00000000-0000-0000-0000-000000000000'; // Replace with actual auth
 
-const SKILL_ICONS: Record<SkillType, React.ReactNode> = {
-  'React Developer': <Code className="w-4 h-4" />,
-  'Full Stack Developer': <Globe className="w-4 h-4" />,
-  'Frontend Developer': <Palette className="w-4 h-4" />,
-  'Backend Developer': <Database className="w-4 h-4" />,
-  'DevOps Engineer': <Cloud className="w-4 h-4" />,
-  'Data Scientist': <BarChart className="w-4 h-4" />,
-  'AI/ML Engineer': <Brain className="w-4 h-4" />,
-  'Mobile App Developer': <Smartphone className="w-4 h-4" />,
-  'UI/UX Designer': <Palette className="w-4 h-4" />,
-  'Product Manager': <Briefcase className="w-4 h-4" />,
-  'Digital Marketer': <TrendingUp className="w-4 h-4" />,
-  'Content Writer': <MessageSquare className="w-4 h-4" />,
-  'SEO Specialist': <Search className="w-4 h-4" />,
-  'Blockchain Developer': <Shield className="w-4 h-4" />,
-  'Cloud Architect': <Cloud className="w-4 h-4" />,
-  'Cybersecurity Analyst': <Shield className="w-4 h-4" />,
-  'Game Developer': <Gamepad2 className="w-4 h-4" />,
-  'QA Engineer': <TestTube className="w-4 h-4" />,
-  'Business Analyst': <BarChart className="w-4 h-4" />,
-  'Sales Executive': <ShoppingBag className="w-4 h-4" />,
-  'Social Media Manager': <Camera className="w-4 h-4" />,
-  'E-commerce Specialist': <ShoppingBag className="w-4 h-4" />,
-  'Video Editing': <Video className="w-4 h-4" />
-};
+export default function DashboardPage() {
+  const [isProModalOpen, setIsProModalOpen] = useState(false);
+  const [credits, setCredits] = useState(3);
+  const [selectedSkill, setSelectedSkill] = useState<string>('all');
+  const [leads, setLeads] = useState<Lead[]>([]);
+  const [loading, setLoading] = useState(true);
 
-const SKILL_CATEGORIES = [
-  {
-    id: 'development',
-    name: 'Development',
-    skills: ['React Developer', 'Full Stack Developer', 'Frontend Developer', 'Backend Developer', 'Mobile App Developer', 'Blockchain Developer', 'Game Developer']
-  },
-  {
-    id: 'ai-data',
-    name: 'AI & Data',
-    skills: ['Data Scientist', 'AI/ML Engineer']
-  },
-  {
-    id: 'design',
-    name: 'Design & Creative',
-    skills: ['UI/UX Designer', 'Video Editing']
-  },
-  {
-    id: 'business',
-    name: 'Business',
-    skills: ['Product Manager', 'Business Analyst', 'Sales Executive']
-  },
-  {
-    id: 'marketing',
-    name: 'Marketing',
-    skills: ['Digital Marketer', 'SEO Specialist', 'Social Media Manager', 'E-commerce Specialist', 'Content Writer']
-  },
-  {
-    id: 'operations',
-    name: 'Operations',
-    skills: ['DevOps Engineer', 'Cloud Architect', 'Cybersecurity Analyst', 'QA Engineer']
-  }
-];
-
-const TRENDING_SKILLS: SkillType[] = ['AI/ML Engineer', 'React Developer', 'Data Scientist', 'DevOps Engineer', 'Product Manager', 'Video Editing'];
-
-// ✅ Props interface – now optional
-interface SkillSwitcherProps {
-  selectedSkill?: string;          // optional – if not provided, use from context
-  onSkillChange?: (skill: string) => void;  // optional – fallback to context setter
-}
-
-export default function SkillSwitcher({ 
-  selectedSkill: propSelectedSkill, 
-  onSkillChange: propOnSkillChange 
-}: SkillSwitcherProps) {
-  // 🔥 Use context as fallback
-  const { selectedSkill: contextSkill, setSelectedSkill: setContextSkill, isPro } = useUser();
-
-  // Determine the effective skill and change handler
-  const effectiveSelectedSkill = propSelectedSkill ?? contextSkill;
-  const handleSkillChange = (skill: SkillType) => {
-    if (propOnSkillChange) {
-      propOnSkillChange(skill);
-    } else {
-      setContextSkill(skill);
-    }
-  };
-
-  const [isOpen, setIsOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [activeCategory, setActiveCategory] = useState<string>('all');
-  const [recentSkills, setRecentSkills] = useState<SkillType[]>([]);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-
-  // Load recent skills from localStorage
+  // Fetch user credits and leads
   useEffect(() => {
-    const saved = localStorage.getItem('recent-skills');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        // Filter only valid skills
-        const validSkills = parsed.filter((skill: string) => 
-          AVAILABLE_SKILLS.includes(skill as SkillType)
-        );
-        setRecentSkills(validSkills);
-      } catch (error) {
-        console.error('Error loading recent skills:', error);
+    const fetchUserAndLeads = async () => {
+      setLoading(true);
+
+      // Get user credits
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('credits')
+        .eq('id', DEMO_USER_ID)
+        .single();
+
+      if (!profileError && profile) {
+        setCredits(profile.credits);
       }
-    }
-  }, []);
 
-  // Save recent skill
-  const saveToRecent = (skill: SkillType) => {
-    if (!recentSkills.includes(skill)) {
-      const newRecent = [skill, ...recentSkills.slice(0, 4)];
-      setRecentSkills(newRecent);
-      localStorage.setItem('recent-skills', JSON.stringify(newRecent));
-    }
-  };
+      // Fetch leads based on selected skill
+      let query = supabase.from('leads').select('*').order('posted_date', { ascending: false });
+      if (selectedSkill !== 'all') {
+        query = query.eq('skill', selectedSkill);
+      }
+      const { data: leadsData, error: leadsError } = await query;
 
-  // Handle skill selection – call parent's onSkillChange or context
-  const handleSkillSelect = async (skill: SkillType) => {
-    handleSkillChange(skill);
-    saveToRecent(skill);
-    setIsOpen(false);
-    setSearchQuery('');
-  };
+      if (!leadsError) {
+        setLeads(leadsData as Lead[]);
+      } else {
+        toast.error('Failed to load leads');
+      }
+      setLoading(false);
+    };
 
-  // Filter skills based on search and category
-  const filteredSkills = AVAILABLE_SKILLS.filter(skill => {
-    const matchesSearch = skill.toLowerCase().includes(searchQuery.toLowerCase());
-    
-    if (activeCategory === 'all') return matchesSearch;
-    if (activeCategory === 'trending') return matchesSearch && TRENDING_SKILLS.includes(skill);
-    
-    const category = SKILL_CATEGORIES.find(cat => cat.id === activeCategory);
-    return matchesSearch && category?.skills.includes(skill);
-  });
+    fetchUserAndLeads();
+  }, [selectedSkill]);
 
-  // Close dropdown on outside click
+  // Real-time subscription for new leads
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+    const channel = supabase
+      .channel('dashboard-leads')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'leads',
+          filter: selectedSkill !== 'all' ? `skill=eq.${selectedSkill}` : undefined,
+        },
+        (payload) => {
+          const newLead = payload.new as Lead;
+          setLeads((prev) => [newLead, ...prev]);
+          toast.success('New lead arrived!', { icon: '🔥' });
+        }
+      )
+      .subscribe();
 
-  // Get skill stats (simulated)
-  const getSkillStats = (skill: SkillType) => {
-    const stats: Record<SkillType, { leads: number; growth: number }> = {
-      'React Developer': { leads: 245, growth: 15 },
-      'Full Stack Developer': { leads: 156, growth: 18 },
-      'Frontend Developer': { leads: 132, growth: 12 },
-      'Backend Developer': { leads: 178, growth: 20 },
-      'DevOps Engineer': { leads: 142, growth: 25 },
-      'Data Scientist': { leads: 167, growth: 22 },
-      'AI/ML Engineer': { leads: 189, growth: 32 },
-      'Mobile App Developer': { leads: 98, growth: 15 },
-      'UI/UX Designer': { leads: 115, growth: 20 },
-      'Product Manager': { leads: 134, growth: 12 },
-      'Digital Marketer': { leads: 128, growth: 8 },
-      'Content Writer': { leads: 95, growth: 10 },
-      'SEO Specialist': { leads: 88, growth: 12 },
-      'Blockchain Developer': { leads: 67, growth: 30 },
-      'Cloud Architect': { leads: 87, growth: 28 },
-      'Cybersecurity Analyst': { leads: 76, growth: 25 },
-      'Game Developer': { leads: 54, growth: 18 },
-      'QA Engineer': { leads: 92, growth: 15 },
-      'Business Analyst': { leads: 108, growth: 10 },
-      'Sales Executive': { leads: 145, growth: 8 },
-      'Social Media Manager': { leads: 112, growth: 15 },
-      'E-commerce Specialist': { leads: 124, growth: 22 },
-      'Video Editing': { leads: 203, growth: 45 }
+    return () => {
+      supabase.removeChannel(channel);
     };
-    return stats[skill] || { leads: Math.floor(Math.random() * 200), growth: Math.floor(Math.random() * 30) };
+  }, [selectedSkill]);
+
+  // Handle AI Pitch generation (consumes 1 credit)
+  const handleGeneratePitch = async (lead: Lead) => {
+    if (credits <= 0) {
+      setIsProModalOpen(true);
+      return;
+    }
+
+    try {
+      const newCredits = await updateUserCredits(
+        DEMO_USER_ID,
+        -1,
+        'PRO_USAGE',
+        `AI Pitch for lead: ${lead.title}`
+      );
+      setCredits(newCredits);
+      await logUserActivity(DEMO_USER_ID, 'generate_pitch', { lead_id: lead.id });
+
+      // Simulate pitch generation (replace with actual API call)
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      toast.success(`✨ AI Pitch generated! (1 credit used, ${newCredits} left)`);
+    } catch (error) {
+      toast.error('Failed to generate pitch');
+    }
   };
+
+  // Stats (simplified)
+  const totalLeads = leads.length;
+  const creditsUsed = 3 - credits;
+  const estimatedRevenue = creditsUsed * 5;
 
   return (
-    <div className="relative" ref={dropdownRef}>
-      {/* Main Trigger */}
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="group relative w-full max-w-2xl mx-auto bg-gradient-to-br from-gray-900 to-gray-950 border border-gray-800 rounded-2xl p-4 shadow-2xl hover:border-purple-500/50 transition-all duration-300"
-      >
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <div className="p-3 bg-gradient-to-br from-purple-600/20 to-blue-600/20 rounded-xl">
-              <Target className="w-6 h-6 text-purple-400" />
-            </div>
-            <div className="text-left">
-              <div className="flex items-center space-x-2 mb-1">
-                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Selected Skill</span>
-                {TRENDING_SKILLS.includes(effectiveSelectedSkill as SkillType) && (
-                  <span className="flex items-center text-xs font-bold text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full">
-                    <TrendingUp className="w-3 h-3 mr-1" />
-                    Trending
-                  </span>
-                )}
-              </div>
-              <div className="flex items-center space-x-3">
-                <span className="text-2xl font-bold text-white">{effectiveSelectedSkill}</span>
-                <div className="flex items-center text-sm text-gray-400">
-                  <Zap className="w-4 h-4 mr-1 text-green-400" />
-                  <span>{getSkillStats(effectiveSelectedSkill as SkillType).leads} active leads</span>
-                  <span className="mx-2">•</span>
-                  <TrendingUp className="w-4 h-4 mr-1 text-blue-400" />
-                  <span className="text-green-400">+{getSkillStats(effectiveSelectedSkill as SkillType).growth}%</span>
-                </div>
-              </div>
-            </div>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+      <Navbar onOpenPro={() => setIsProModalOpen(true)} creditsLeft={credits} />
+      <UpgradeModal isOpen={isProModalOpen} onClose={() => setIsProModalOpen(false)} />
+
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Stats Cards */}
+        <div className="mb-8 grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 flex items-center gap-4">
+            <div className="p-3 bg-blue-100 rounded-xl"><Zap className="w-6 h-6 text-blue-600" /></div>
+            <div><p className="text-sm text-slate-600">Credits Remaining</p><p className="text-2xl font-bold text-slate-900">{credits} / 3</p></div>
           </div>
-          <div className="flex items-center space-x-3">
-            <div className="hidden md:block">
-              <div className="text-right">
-                <div className="text-xs text-gray-500">Switch Skill</div>
-                <div className="text-sm text-gray-400">Tap to explore {AVAILABLE_SKILLS.length}+ options</div>
-              </div>
-            </div>
-            <div className="p-2 bg-gray-800 rounded-lg group-hover:bg-purple-500/20 transition-colors">
-              <ChevronRight className={`w-5 h-5 text-gray-400 group-hover:text-purple-400 transition-all ${isOpen ? 'rotate-90' : ''}`} />
-            </div>
+          <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 flex items-center gap-4">
+            <div className="p-3 bg-green-100 rounded-xl"><TrendingUp className="w-6 h-6 text-green-600" /></div>
+            <div><p className="text-sm text-slate-600">Leads Available</p><p className="text-2xl font-bold text-slate-900">{totalLeads}</p></div>
+          </div>
+          <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 flex items-center gap-4">
+            <div className="p-3 bg-amber-100 rounded-xl"><Crown className="w-6 h-6 text-amber-600" /></div>
+            <div><p className="text-sm text-slate-600">Est. Revenue</p><p className="text-2xl font-bold text-slate-900">${estimatedRevenue}</p></div>
           </div>
         </div>
 
-        {/* Progress Bar */}
-        <div className="mt-4">
-          <div className="flex justify-between text-xs text-gray-500 mb-1">
-            <span>Lead Match Score</span>
-            <span>92%</span>
-          </div>
-          <div className="w-full h-2 bg-gray-800 rounded-full overflow-hidden">
-            <div 
-              className="h-full bg-gradient-to-r from-purple-500 to-blue-500 rounded-full transition-all duration-1000"
-              style={{ width: '92%' }}
-            />
-          </div>
-        </div>
-      </button>
-
-      {/* Dropdown Modal */}
-      <AnimatePresence>
-        {isOpen && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            className="absolute top-full left-1/2 transform -translate-x-1/2 mt-4 w-full max-w-4xl bg-gray-900 border border-gray-800 rounded-2xl shadow-2xl z-50 overflow-hidden"
-          >
-            <div className="p-6">
-              {/* Header */}
-              <div className="flex items-center justify-between mb-6">
-                <div>
-                  <h3 className="text-xl font-bold text-white">Select Your Skill</h3>
-                  <p className="text-gray-400 text-sm mt-1">
-                    Choose from {AVAILABLE_SKILLS.length}+ in-demand skills. Leads will update instantly.
-                  </p>
-                </div>
-                <button
-                  onClick={() => setIsOpen(false)}
-                  className="p-2 hover:bg-gray-800 rounded-lg transition-colors"
-                >
-                  <X className="w-5 h-5 text-gray-400" />
-                </button>
+        <div className="flex flex-col lg:flex-row gap-8">
+          {/* Sidebar – SkillSwitcher */}
+          <aside className="w-full lg:w-1/4">
+            <div className="sticky top-20 space-y-4">
+              <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><span>🎯</span> Filter by Skill</h3>
+                <SkillSwitcher selectedSkill={selectedSkill} onSkillChange={setSelectedSkill} />
+                <p className="text-xs text-slate-500 mt-4">Showing {leads.length} {leads.length === 1 ? 'lead' : 'leads'}</p>
               </div>
-
-              {/* Search Bar */}
-              <div className="relative mb-6">
-                <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-500" />
-                <input
-                  type="text"
-                  placeholder="Search skills (e.g., React, AI, Marketing)..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-12 pr-4 py-3 bg-gray-800 border border-gray-700 rounded-xl text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 transition-colors"
-                  autoFocus
-                />
-                {searchQuery && (
-                  <button
-                    onClick={() => setSearchQuery('')}
-                    className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-white"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                )}
+              <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-5 rounded-2xl border border-blue-100">
+                <h4 className="font-semibold text-slate-800 flex items-center gap-2 mb-2"><Sparkles className="w-4 h-4 text-blue-600" /> Pro Tip</h4>
+                <p className="text-sm text-slate-600">Use AI Pitch to stand out. Pro users get <span className="font-bold text-blue-600">50 pitches/month</span> and <span className="font-bold">10‑sec alerts</span>.</p>
               </div>
+            </div>
+          </aside>
 
-              {/* Categories */}
-              <div className="flex flex-wrap gap-2 mb-6">
-                <button
-                  onClick={() => setActiveCategory('all')}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeCategory === 'all' ? 'bg-purple-600 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}
-                >
-                  All Skills
-                </button>
-                {SKILL_CATEGORIES.map(category => (
-                  <button
-                    key={category.id}
-                    onClick={() => setActiveCategory(category.id)}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeCategory === category.id ? 'bg-purple-600 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}
-                  >
-                    {category.name}
-                  </button>
+          {/* Main Feed – Job Cards */}
+          <section className="w-full lg:w-3/4">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold text-slate-900">
+                {selectedSkill === 'all' ? 'All Recommended Leads' : `${selectedSkill} Leads`}
+              </h2>
+              <div className="text-sm text-slate-500 bg-white px-4 py-2 rounded-lg border border-slate-200 shadow-sm">
+                {leads.length} fresh gigs
+              </div>
+            </div>
+
+            {loading ? (
+              <div className="flex justify-center py-20"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" /></div>
+            ) : leads.length === 0 ? (
+              <div className="bg-white rounded-2xl p-12 text-center border border-slate-200">
+                <p className="text-slate-500">No leads found for this skill. Try another filter.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-4">
+                {leads.map((lead) => (
+                  <JobCard
+                    key={lead.id}
+                    lead={lead}
+                    onGeneratePitch={handleGeneratePitch}
+                    creditsRemaining={credits}
+                  />
                 ))}
-                <button
-                  onClick={() => setActiveCategory('trending')}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center ${activeCategory === 'trending' ? 'bg-amber-600 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}
-                >
-                  <TrendingUp className="w-4 h-4 mr-2" />
-                  Trending
-                </button>
               </div>
-
-              {/* Recent Skills */}
-              {recentSkills.length > 0 && !searchQuery && activeCategory === 'all' && (
-                <div className="mb-6">
-                  <div className="flex items-center justify-between mb-3">
-                    <h4 className="text-sm font-semibold text-gray-400 uppercase tracking-wider">Recently Used</h4>
-                    <Clock className="w-4 h-4 text-gray-500" />
-                  </div>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    {recentSkills.map(skill => (
-                      <button
-                        key={skill}
-                        onClick={() => handleSkillSelect(skill)}
-                        className="p-3 bg-gray-800 hover:bg-gray-700 rounded-lg text-left transition-colors group"
-                      >
-                        <div className="flex items-center space-x-3">
-                          <div className="p-2 bg-purple-500/10 rounded-lg">
-                            {SKILL_ICONS[skill]}
-                          </div>
-                          <div className="flex-1">
-                            <div className="text-sm font-medium text-white truncate">{skill}</div>
-                            <div className="text-xs text-gray-400">
-                              {getSkillStats(skill).leads} leads
-                            </div>
-                          </div>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Skills Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-h-96 overflow-y-auto pr-2">
-                {filteredSkills.map(skill => {
-                  const stats = getSkillStats(skill);
-                  const isTrending = TRENDING_SKILLS.includes(skill);
-                  const isSelected = skill === effectiveSelectedSkill;
-                  
-                  return (
-                    <button
-                      key={skill}
-                      onClick={() => handleSkillSelect(skill)}
-                      className={`p-4 rounded-xl border transition-all duration-300 group text-left ${
-                        isSelected
-                          ? 'bg-gradient-to-br from-purple-600/20 to-blue-600/20 border-purple-500/50'
-                          : 'bg-gray-800/50 border-gray-700 hover:border-purple-500/30 hover:bg-gray-800'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between mb-3">
-                        <div className="flex items-center space-x-3">
-                          <div className={`p-2 rounded-lg ${
-                            isSelected 
-                              ? 'bg-gradient-to-br from-purple-500 to-blue-500 text-white' 
-                              : 'bg-gray-700 text-gray-400'
-                          }`}>
-                            {SKILL_ICONS[skill]}
-                          </div>
-                          <div>
-                            <div className="flex items-center space-x-2">
-                              <h4 className="font-semibold text-white">{skill}</h4>
-                              {isTrending && (
-                                <span className="text-xs font-bold text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full">
-                                  Hot
-                                </span>
-                              )}
-                            </div>
-                            <div className="flex items-center text-xs text-gray-400 mt-1">
-                              <Briefcase className="w-3 h-3 mr-1" />
-                              {stats.leads.toLocaleString()} opportunities
-                            </div>
-                          </div>
-                        </div>
-                        {isSelected && (
-                          <div className="p-1 bg-green-500 rounded-full">
-                            <Check className="w-4 h-4 text-white" />
-                          </div>
-                        )}
-                      </div>
-                      
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center text-sm">
-                          <TrendingUp className={`w-4 h-4 mr-1 ${stats.growth > 20 ? 'text-green-400' : 'text-blue-400'}`} />
-                          <span className={stats.growth > 20 ? 'text-green-400' : 'text-blue-400'}>
-                            +{stats.growth}% growth
-                          </span>
-                        </div>
-                        <div className="flex items-center text-sm text-gray-400">
-                          <Star className="w-4 h-4 mr-1 text-yellow-400" />
-                          <span>4.{Math.floor(Math.random() * 9)}/5</span>
-                        </div>
-                      </div>
-                      
-                      {/* Progress bar */}
-                      <div className="mt-3">
-                        <div className="text-xs text-gray-500 mb-1">Market Demand</div>
-                        <div className="w-full h-1.5 bg-gray-700 rounded-full overflow-hidden">
-                          <div 
-                            className="h-full bg-gradient-to-r from-purple-500 to-blue-500 rounded-full"
-                            style={{ width: `${Math.min(100, (stats.leads / 250) * 100)}%` }}
-                          />
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* No Results */}
-              {filteredSkills.length === 0 && (
-                <div className="text-center py-12">
-                  <Search className="w-12 h-12 text-gray-700 mx-auto mb-4" />
-                  <h4 className="text-lg font-semibold text-gray-300 mb-2">No skills found</h4>
-                  <p className="text-gray-500">
-                    Try a different search term or browse categories
-                  </p>
-                </div>
-              )}
-
-              {/* Pro Feature Notice */}
-              {isPro && (
-                <div className="mt-6 p-4 bg-gradient-to-r from-purple-900/30 to-blue-900/30 border border-purple-500/20 rounded-xl">
-                  <div className="flex items-center space-x-3">
-                    <Zap className="w-5 h-5 text-purple-400" />
-                    <div>
-                      <h4 className="text-sm font-semibold text-white">Pro Feature Active</h4>
-                      <p className="text-xs text-gray-400">
-                        You'll receive real-time leads for {effectiveSelectedSkill} every 10 seconds
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+            )}
+          </section>
+        </div>
+      </main>
     </div>
   );
 }
