@@ -109,8 +109,16 @@ const SKILL_CATEGORIES = [
 
 const TRENDING_SKILLS: SkillType[] = ['AI/ML Engineer', 'React Developer', 'Data Scientist', 'DevOps Engineer', 'Product Manager', 'Video Editing'];
 
-export default function SkillSwitcher() {
-  const { selectedSkill, setSelectedSkill, isPro } = useUser();
+// ✅ Props interface
+interface SkillSwitcherProps {
+  selectedSkill: string;          // currently selected skill (from parent)
+  onSkillChange: (skill: string) => void;  // callback to update parent
+}
+
+export default function SkillSwitcher({ selectedSkill, onSkillChange }: SkillSwitcherProps) {
+  // 🔥 We still use context for isPro (and maybe other things), but NOT for selected skill
+  const { isPro } = useUser();
+
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState<string>('all');
@@ -143,9 +151,9 @@ export default function SkillSwitcher() {
     }
   };
 
-  // Handle skill selection
+  // Handle skill selection – call parent's onSkillChange
   const handleSkillSelect = async (skill: SkillType) => {
-    await setSelectedSkill(skill);
+    onSkillChange(skill);   // ✅ update parent state
     saveToRecent(skill);
     setIsOpen(false);
     setSearchQuery('');
@@ -155,13 +163,8 @@ export default function SkillSwitcher() {
   const filteredSkills = AVAILABLE_SKILLS.filter(skill => {
     const matchesSearch = skill.toLowerCase().includes(searchQuery.toLowerCase());
     
-    if (activeCategory === 'all') {
-      return matchesSearch;
-    }
-    
-    if (activeCategory === 'trending') {
-      return matchesSearch && TRENDING_SKILLS.includes(skill);
-    }
+    if (activeCategory === 'all') return matchesSearch;
+    if (activeCategory === 'trending') return matchesSearch && TRENDING_SKILLS.includes(skill);
     
     const category = SKILL_CATEGORIES.find(cat => cat.id === activeCategory);
     return matchesSearch && category?.skills.includes(skill);
@@ -205,7 +208,6 @@ export default function SkillSwitcher() {
       'E-commerce Specialist': { leads: 124, growth: 22 },
       'Video Editing': { leads: 203, growth: 45 }
     };
-    
     return stats[skill] || { leads: Math.floor(Math.random() * 200), growth: Math.floor(Math.random() * 30) };
   };
 
@@ -224,7 +226,7 @@ export default function SkillSwitcher() {
             <div className="text-left">
               <div className="flex items-center space-x-2 mb-1">
                 <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Selected Skill</span>
-                {TRENDING_SKILLS.includes(selectedSkill) && (
+                {TRENDING_SKILLS.includes(selectedSkill as SkillType) && (
                   <span className="flex items-center text-xs font-bold text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full">
                     <TrendingUp className="w-3 h-3 mr-1" />
                     Trending
@@ -235,10 +237,10 @@ export default function SkillSwitcher() {
                 <span className="text-2xl font-bold text-white">{selectedSkill}</span>
                 <div className="flex items-center text-sm text-gray-400">
                   <Zap className="w-4 h-4 mr-1 text-green-400" />
-                  <span>{getSkillStats(selectedSkill).leads} active leads</span>
+                  <span>{getSkillStats(selectedSkill as SkillType).leads} active leads</span>
                   <span className="mx-2">•</span>
                   <TrendingUp className="w-4 h-4 mr-1 text-blue-400" />
-                  <span className="text-green-400">+{getSkillStats(selectedSkill).growth}%</span>
+                  <span className="text-green-400">+{getSkillStats(selectedSkill as SkillType).growth}%</span>
                 </div>
               </div>
             </div>
