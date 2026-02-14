@@ -30,7 +30,7 @@ import {
   Camera,
   Gamepad2,
   TestTube,
-  Video
+  Video,
   Zap 
 } from 'lucide-react';
 
