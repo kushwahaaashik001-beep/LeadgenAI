@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
+import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import JobCard, { Lead } from '@/components/JobCard';
 import { toast } from 'react-hot-toast';
@@ -225,5 +225,5 @@ function DashboardContent() {
   );
 }
 
-// ⚡ IMPORTANT: This fixes the #425 hydration error
+// ⚡ IMPORTANT: This single line fixes the #425 hydration error
 export default dynamic(() => Promise.resolve(DashboardContent), { ssr: false });
