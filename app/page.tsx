@@ -3,11 +3,15 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import JobCard, { Lead } from '@/components/JobCard';
+import UpgradeModal from '@/components/UpgradeModal';
 import { toast } from 'react-hot-toast';
+import { Sparkles, Zap, TrendingUp, Crown, Check } from 'lucide-react';
 
 export default function HomePage() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isProModalOpen, setIsProModalOpen] = useState(false);
+  const [credits] = useState(3); // Demo credits – replace with real user context later
 
   useEffect(() => {
     const fetchLeads = async () => {
@@ -49,13 +53,22 @@ export default function HomePage() {
     };
   }, []);
 
-  // Placeholder – replace with your actual pitch logic
+  // Demo AI Pitch – opens upgrade modal if no credits (simulated)
   const handleGeneratePitch = async (lead: Lead) => {
-    toast.success(`Demo: AI Pitch for "${lead.title}"`);
+    if (credits <= 0) {
+      setIsProModalOpen(true);
+      return;
+    }
+    toast.success(`✨ Demo: AI Pitch for "${lead.title}" (1 credit used)`);
+    // In real app, you would call API and deduct credits
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+      {/* Upgrade Modal */}
+      <UpgradeModal isOpen={isProModalOpen} onClose={() => setIsProModalOpen(false)} />
+
+      {/* Hero Section */}
       <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
           <h1 className="text-4xl md:text-5xl font-bold mb-4">
@@ -67,34 +80,123 @@ export default function HomePage() {
         </div>
       </div>
 
+      {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold text-slate-900">Latest Opportunities</h2>
-          <span className="text-sm text-slate-500 bg-white px-4 py-2 rounded-lg border border-slate-200">
-            {leads.length} fresh leads
-          </span>
+        {/* Pro Upsell Banner */}
+        <div className="mb-8 bg-gradient-to-r from-amber-500 to-orange-500 rounded-2xl p-6 text-white shadow-lg">
+          <div className="flex flex-col md:flex-row items-center justify-between">
+            <div className="flex items-center gap-4 mb-4 md:mb-0">
+              <div className="p-3 bg-white/20 rounded-xl">
+                <Crown className="w-8 h-8" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold">Unlock Pro Features</h3>
+                <p className="text-amber-100">Get 50 AI pitches/month, 10-sec alerts, and more.</p>
+              </div>
+            </div>
+            <button
+              onClick={() => setIsProModalOpen(true)}
+              className="px-6 py-3 bg-white text-orange-600 rounded-xl font-bold hover:bg-orange-50 transition-colors shadow-lg"
+            >
+              Upgrade Now →
+            </button>
+          </div>
         </div>
 
-        {loading ? (
-          <div className="flex justify-center py-20">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" />
-          </div>
-        ) : leads.length === 0 ? (
-          <div className="bg-white rounded-2xl p-12 text-center border border-slate-200">
-            <p className="text-slate-500">No leads yet. Check back soon!</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {leads.map((lead) => (
-              <JobCard
-                key={lead.id}
-                lead={lead}
-                onGeneratePitch={handleGeneratePitch}
-                creditsRemaining={3}   // Replace with real user credits later
-              />
-            ))}
-          </div>
-        )}
+        {/* Two Column Layout: Leads + Pro Features */}
+        <div className="flex flex-col lg:flex-row gap-8">
+          {/* Leads Feed */}
+          <section className="w-full lg:w-2/3">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-bold text-slate-900">Latest Opportunities</h2>
+              <span className="text-sm text-slate-500 bg-white px-4 py-2 rounded-lg border border-slate-200 shadow-sm">
+                {leads.length} fresh leads
+              </span>
+            </div>
+
+            {loading ? (
+              <div className="flex justify-center py-20">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" />
+              </div>
+            ) : leads.length === 0 ? (
+              <div className="bg-white rounded-2xl p-12 text-center border border-slate-200">
+                <p className="text-slate-500">No leads yet. Check back soon!</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {leads.map((lead) => (
+                  <JobCard
+                    key={lead.id}
+                    lead={lead}
+                    onGeneratePitch={handleGeneratePitch}
+                    creditsRemaining={credits}   // Demo: 3 credits
+                  />
+                ))}
+              </div>
+            )}
+          </section>
+
+          {/* Sidebar – Pro Features */}
+          <aside className="w-full lg:w-1/3">
+            <div className="sticky top-20 space-y-6">
+              {/* Pro Feature Card */}
+              <div className="bg-gradient-to-br from-indigo-900 to-purple-900 rounded-2xl p-6 text-white border border-indigo-500 shadow-xl">
+                <div className="flex items-center gap-3 mb-4">
+                  <Crown className="w-8 h-8 text-yellow-300" />
+                  <h3 className="text-xl font-bold">Go Pro</h3>
+                </div>
+                <ul className="space-y-3 mb-6">
+                  <li className="flex items-start gap-3">
+                    <Check className="w-5 h-5 text-green-400 mt-0.5 flex-shrink-0" />
+                    <span><span className="font-bold">50 AI pitches</span> per month</span>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <Check className="w-5 h-5 text-green-400 mt-0.5 flex-shrink-0" />
+                    <span><span className="font-bold">10‑second</span> real-time alerts</span>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <Check className="w-5 h-5 text-green-400 mt-0.5 flex-shrink-0" />
+                    <span><span className="font-bold">Unlimited</span> lead views</span>
+                  </li>
+                  <li className="flex items-start gap-3">
+                    <Check className="w-5 h-5 text-green-400 mt-0.5 flex-shrink-0" />
+                    <span>Priority <span className="font-bold">support</span></span>
+                  </li>
+                </ul>
+                <button
+                  onClick={() => setIsProModalOpen(true)}
+                  className="w-full py-3 bg-gradient-to-r from-yellow-400 to-orange-500 text-gray-900 rounded-xl font-bold hover:from-yellow-500 hover:to-orange-600 transition-all shadow-lg"
+                >
+                  Upgrade – $29/month
+                </button>
+                <p className="text-xs text-indigo-200 text-center mt-3">
+                  Cancel anytime. No questions asked.
+                </p>
+              </div>
+
+              {/* Quick Stats (optional) */}
+              <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
+                <h4 className="font-semibold text-slate-800 mb-3 flex items-center gap-2">
+                  <TrendingUp className="w-4 h-4 text-blue-500" /> Today's Stats
+                </h4>
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-600">New Leads</span>
+                    <span className="font-bold text-slate-900">24</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-600">Avg. Budget</span>
+                    <span className="font-bold text-slate-900">$850</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-600">Pro Users</span>
+                    <span className="font-bold text-green-600">+18%</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </aside>
+        </div>
       </main>
     </div>
   );
