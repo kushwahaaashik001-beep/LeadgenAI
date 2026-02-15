@@ -1,17 +1,15 @@
-"use client";
+'use client';
 
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import { Zap, TrendingUp, Crown, Sparkles } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import UpgradeModal from '@/components/UpgradeModal';
-import JobCard from '@/components/JobCard';
+import JobCard, { Lead } from '@/components/JobCard';
 import SkillSwitcher from '@/components/SkillSwitcher';
-import { Lead } from '@/app/hooks/useLeads';
 import { supabase, updateUserCredits, logUserActivity } from '@/lib/supabase';
 
-// TODO: Replace with actual authenticated user ID
-const DEMO_USER_ID = '00000000-0000-0000-0000-000000000000';
+const DEMO_USER_ID = '00000000-0000-0000-0000-000000000000'; // Replace with real auth
 
 export default function DashboardPage() {
   const [isProModalOpen, setIsProModalOpen] = useState(false);
@@ -20,43 +18,42 @@ export default function DashboardPage() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Fetch user credits and leads
   useEffect(() => {
     const fetchUserAndLeads = async () => {
       setLoading(true);
       try {
-        // Get user credits
+        // Fetch user credits
         const { data: profile, error: profileError } = await supabase
           .from('profiles')
           .select('credits')
           .eq('id', DEMO_USER_ID)
           .single();
 
-        if (profileError) {
-          console.error('Profile fetch error:', profileError);
-          // Agar error ho toh credits ko 0 mat karo, default 3 hi rahega ya previous value
-          // Hum yahan kuch nahi karte, credits already 3 hai
-        } else if (profile) {
+        if (!profileError && profile) {
           setCredits(profile.credits);
+        } else {
+          console.warn('Profile fetch failed, using default credits');
         }
 
-        // Fetch leads (safely)
-        let query = supabase.from('leads').select('*').order('scraped_at', { ascending: false });
+        // Fetch leads – use 'created_at' for sorting (common column)
+        let query = supabase.from('leads').select('*').order('created_at', { ascending: false });
+
+        // Apply skill filter only if selectedSkill is not 'all' – column 'skill' must exist in table
         if (selectedSkill !== 'all') {
           query = query.eq('skill', selectedSkill);
         }
+
         const { data: leadsData, error: leadsError } = await query;
 
         if (leadsError) {
           console.error('Leads fetch error:', leadsError);
-          toast.error('Failed to load leads');
-          setLeads([]); // ensure leads is always an array
+          toast.error('Failed to load leads: ' + leadsError.message);
+          setLeads([]);
         } else {
-          // Agar leadsData null hai toh empty array set karo
           setLeads(leadsData ?? []);
         }
       } catch (err) {
-        console.error('Unexpected error in fetchUserAndLeads:', err);
+        console.error('Unexpected error:', err);
         toast.error('Something went wrong');
         setLeads([]);
       } finally {
@@ -67,11 +64,10 @@ export default function DashboardPage() {
     fetchUserAndLeads();
   }, [selectedSkill]);
 
-  // Real-time subscription for new leads
+  // Real-time subscription
   useEffect(() => {
-    // Channel name dynamic banaya taaki filter change par naya channel bane
     const channel = supabase
-      .channel(`dashboard-leads-${selectedSkill}`)
+      .channel(`leads-${selectedSkill}`)
       .on(
         'postgres_changes',
         {
@@ -83,7 +79,7 @@ export default function DashboardPage() {
         (payload) => {
           const newLead = payload.new as Lead;
           setLeads((prev) => [newLead, ...prev]);
-          toast.success('New lead arrived!', { icon: '🔥' });
+          toast.success('🔥 New lead arrived!');
         }
       )
       .subscribe();
@@ -93,7 +89,6 @@ export default function DashboardPage() {
     };
   }, [selectedSkill]);
 
-  // Handle AI Pitch generation (consumes 1 credit)
   const handleGeneratePitch = async (lead: Lead) => {
     if (credits <= 0) {
       setIsProModalOpen(true);
@@ -110,7 +105,7 @@ export default function DashboardPage() {
       setCredits(newCredits);
       await logUserActivity(DEMO_USER_ID, 'generate_pitch', { lead_id: lead.id });
 
-      // Simulate pitch generation (replace with actual API call)
+      // Simulate API call
       await new Promise(resolve => setTimeout(resolve, 1000));
       toast.success(`✨ AI Pitch generated! (1 credit used, ${newCredits} left)`);
     } catch (error) {
@@ -119,7 +114,6 @@ export default function DashboardPage() {
     }
   };
 
-  // Stats
   const totalLeads = leads.length;
   const creditsUsed = 3 - credits;
   const estimatedRevenue = creditsUsed * 5;
@@ -156,7 +150,7 @@ export default function DashboardPage() {
         </div>
 
         <div className="flex flex-col lg:flex-row gap-8">
-          {/* Sidebar – SkillSwitcher */}
+          {/* Sidebar */}
           <aside className="w-full lg:w-1/4">
             <div className="sticky top-20 space-y-4">
               <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
@@ -180,11 +174,11 @@ export default function DashboardPage() {
             </div>
           </aside>
 
-          {/* Main Feed – Job Cards */}
+          {/* Main Feed */}
           <section className="w-full lg:w-3/4">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-2xl font-bold text-slate-900">
-                {selectedSkill === 'all' ? 'All Recommended Leads' : `${selectedSkill} Leads`}
+                {selectedSkill === 'all' ? 'All Leads' : `${selectedSkill} Leads`}
               </h2>
               <div className="text-sm text-slate-500 bg-white px-4 py-2 rounded-lg border border-slate-200 shadow-sm">
                 {leads.length} fresh gigs
@@ -197,7 +191,7 @@ export default function DashboardPage() {
               </div>
             ) : leads.length === 0 ? (
               <div className="bg-white rounded-2xl p-12 text-center border border-slate-200">
-                <p className="text-slate-500">No leads found for this skill. Try another filter.</p>
+                <p className="text-slate-500">No leads found. Check database or add some leads.</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-4">
