@@ -1,17 +1,19 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
+import dynamic from 'next/dynamic';
+import { supabase } from '@/lib/supabase';
+import JobCard, { Lead } from '@/components/JobCard';
 import { toast } from 'react-hot-toast';
-import { Zap, TrendingUp, Crown, Sparkles } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import UpgradeModal from '@/components/UpgradeModal';
-import JobCard, { Lead } from '@/components/JobCard';
 import SkillSwitcher from '@/components/SkillSwitcher';
-import { supabase, updateUserCredits, logUserActivity } from '@/lib/supabase';
+import { Zap, TrendingUp, Crown, Sparkles } from 'lucide-react';
+import { updateUserCredits, logUserActivity } from '@/lib/supabase';
 
 const DEMO_USER_ID = '00000000-0000-0000-0000-000000000000';
 
-export default function DashboardPage() {
+function DashboardContent() {
   const [isProModalOpen, setIsProModalOpen] = useState(false);
   const [credits, setCredits] = useState(3);
   const [selectedSkill, setSelectedSkill] = useState<string>('all');
@@ -105,7 +107,7 @@ export default function DashboardPage() {
       setCredits(newCredits);
       await logUserActivity(DEMO_USER_ID, 'generate_pitch', { lead_id: lead.id });
 
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise((resolve) => setTimeout(resolve, 1000));
       toast.success(`✨ AI Pitch generated! (1 credit used, ${newCredits} left)`);
     } catch (error) {
       console.error('Pitch generation error:', error);
@@ -126,21 +128,29 @@ export default function DashboardPage() {
         {/* Stats Cards */}
         <div className="mb-8 grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 flex items-center gap-4">
-            <div className="p-3 bg-blue-100 rounded-xl"><Zap className="w-6 h-6 text-blue-600" /></div>
+            <div className="p-3 bg-blue-100 rounded-xl">
+              <Zap className="w-6 h-6 text-blue-600" />
+            </div>
             <div>
               <p className="text-sm text-slate-600">Credits Remaining</p>
-              <p className="text-2xl font-bold text-slate-900">{credits} / 3</p>
+              <p className="text-2xl font-bold text-slate-900">
+                {credits} / 3
+              </p>
             </div>
           </div>
           <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 flex items-center gap-4">
-            <div className="p-3 bg-green-100 rounded-xl"><TrendingUp className="w-6 h-6 text-green-600" /></div>
+            <div className="p-3 bg-green-100 rounded-xl">
+              <TrendingUp className="w-6 h-6 text-green-600" />
+            </div>
             <div>
               <p className="text-sm text-slate-600">Leads Available</p>
               <p className="text-2xl font-bold text-slate-900">{totalLeads}</p>
             </div>
           </div>
           <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 flex items-center gap-4">
-            <div className="p-3 bg-amber-100 rounded-xl"><Crown className="w-6 h-6 text-amber-600" /></div>
+            <div className="p-3 bg-amber-100 rounded-xl">
+              <Crown className="w-6 h-6 text-amber-600" />
+            </div>
             <div>
               <p className="text-sm text-slate-600">Est. Revenue</p>
               <p className="text-2xl font-bold text-slate-900">${estimatedRevenue}</p>
@@ -156,7 +166,10 @@ export default function DashboardPage() {
                 <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
                   <span>🎯</span> Filter by Skill
                 </h3>
-                <SkillSwitcher selectedSkill={selectedSkill} onSkillChange={setSelectedSkill} />
+                <SkillSwitcher
+                  selectedSkill={selectedSkill}
+                  onSkillChange={setSelectedSkill}
+                />
                 <p className="text-xs text-slate-500 mt-4">
                   Showing {leads.length} {leads.length === 1 ? 'lead' : 'leads'}
                 </p>
@@ -166,7 +179,8 @@ export default function DashboardPage() {
                   <Sparkles className="w-4 h-4 text-blue-600" /> Pro Tip
                 </h4>
                 <p className="text-sm text-slate-600">
-                  Use AI Pitch to stand out. Pro users get <span className="font-bold text-blue-600">50 pitches/month</span> and{' '}
+                  Use AI Pitch to stand out. Pro users get{' '}
+                  <span className="font-bold text-blue-600">50 pitches/month</span> and{' '}
                   <span className="font-bold">10‑sec alerts</span>.
                 </p>
               </div>
@@ -210,3 +224,6 @@ export default function DashboardPage() {
     </div>
   );
 }
+
+// ⚡ IMPORTANT: This fixes the #425 hydration error
+export default dynamic(() => Promise.resolve(DashboardContent), { ssr: false });
