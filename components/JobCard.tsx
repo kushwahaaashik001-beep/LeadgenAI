@@ -5,7 +5,7 @@ import { ExternalLink, Zap, Sparkles, Bookmark, Star } from 'lucide-react';
 import { useState } from 'react';
 import toast from 'react-hot-toast';
 
-// ✅ Exact Lead type - tumhare database ke hisaab se
+// ✅ Exact Lead type – tumhare database ke hisaab se
 export interface Lead {
   id: string;
   title: string;
@@ -23,7 +23,8 @@ interface JobCardProps {
   lead: Lead;
   onGeneratePitch?: (lead: Lead) => Promise<void>;
   creditsRemaining?: number;
-  onContacted?: (id: string) => void;    // Old props - optional rakhe
+  // Purane props – optional rakhe (kisi aur jagah use ho rahe ho to)
+  onContacted?: (id: string) => void;
   onInterview?: (id: string) => void;
   onRejected?: (id: string) => void;
   onAccepted?: (id: string) => void;
