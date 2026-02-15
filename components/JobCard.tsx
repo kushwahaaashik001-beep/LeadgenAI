@@ -5,7 +5,7 @@ import { ExternalLink, Zap, Sparkles, Bookmark, Star } from 'lucide-react';
 import { useState } from 'react';
 import toast from 'react-hot-toast';
 
-// ✅ Lead type – exactly matching your new database table
+// ✅ Exact Lead type - tumhare database ke hisaab se
 export interface Lead {
   id: string;
   title: string;
@@ -23,16 +23,19 @@ interface JobCardProps {
   lead: Lead;
   onGeneratePitch?: (lead: Lead) => Promise<void>;
   creditsRemaining?: number;
-  // Optional old callbacks (if needed elsewhere)
-  onContacted?: (id: string) => void;
+  onContacted?: (id: string) => void;    // Old props - optional rakhe
   onInterview?: (id: string) => void;
   onRejected?: (id: string) => void;
+  onAccepted?: (id: string) => void;
+  onAddNote?: (id: string, note: string) => void;
+  viewMode?: 'grid' | 'list';
 }
 
-export default function JobCard({
-  lead,
-  onGeneratePitch,
+export default function JobCard({ 
+  lead, 
+  onGeneratePitch, 
   creditsRemaining = 3,
+  viewMode = 'grid'
 }: JobCardProps) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
@@ -96,7 +99,7 @@ export default function JobCard({
         {lead.description || 'No description provided.'}
       </p>
 
-      {/* Skill Pill (if exists) */}
+      {/* Skill Pill */}
       {lead.skill && (
         <div className="mb-3">
           <span className="inline-flex items-center px-3 py-1 bg-indigo-50 text-indigo-700 rounded-full text-xs border border-indigo-200">
@@ -163,6 +166,7 @@ export default function JobCard({
         </button>
       </div>
 
+      {/* Credit Warning */}
       {creditsRemaining <= 0 && (
         <p className="text-xs text-amber-600 mt-3 flex items-center gap-1">
           <Zap className="w-3.5 h-3.5" /> No credits – upgrade to generate AI pitches
