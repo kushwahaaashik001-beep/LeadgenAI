@@ -746,7 +746,7 @@ export default function DashboardPage() {
                         transition={{ delay: index * 0.05 }}
                       >
                         <JobCard
-                          lead={lead}
+                          lead={lead as any}
                           onContacted={() => markAsContacted(lead.id)}
                           onInterview={() => markAsInterview && markAsInterview(lead.id)}
                           onRejected={() => markAsRejected && markAsRejected(lead.id)}
