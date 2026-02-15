@@ -22,9 +22,21 @@ interface JobCardProps {
   lead: Lead;
   onGeneratePitch?: (lead: Lead) => Promise<void>;
   creditsRemaining?: number;
+  // The following are optional – included for backward compatibility with other pages
+  onContacted?: (id: string) => void;
+  onInterview?: (id: string) => void;
+  onRejected?: (id: string) => void;
+  onAccepted?: (id: string) => void;
+  onAddNote?: (id: string, note: string) => void;
+  viewMode?: 'grid' | 'list';
 }
 
-export default function JobCard({ lead, onGeneratePitch, creditsRemaining = 3 }: JobCardProps) {
+export default function JobCard({ 
+  lead, 
+  onGeneratePitch, 
+  creditsRemaining = 3,
+  // accept old props but don't use them
+}: JobCardProps) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
 
@@ -65,6 +77,7 @@ export default function JobCard({ lead, onGeneratePitch, creditsRemaining = 3 }:
       whileHover={{ y: -4 }}
       className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-xl hover:border-blue-300 transition-all"
     >
+      {/* Header */}
       <div className="flex items-start justify-between mb-3">
         <div>
           <h3 className="text-lg font-bold text-slate-900 line-clamp-1">{lead.title}</h3>
@@ -81,10 +94,12 @@ export default function JobCard({ lead, onGeneratePitch, creditsRemaining = 3 }:
         </div>
       </div>
 
+      {/* Description */}
       <p className="text-sm text-slate-600 mb-4 line-clamp-2">
         {lead.description || 'No description provided.'}
       </p>
 
+      {/* Skill Pill */}
       {lead.skill && (
         <div className="mb-3">
           <span className="inline-flex items-center px-3 py-1 bg-indigo-50 text-indigo-700 rounded-full text-xs border border-indigo-200">
@@ -94,7 +109,9 @@ export default function JobCard({ lead, onGeneratePitch, creditsRemaining = 3 }:
         </div>
       )}
 
+      {/* Action Buttons */}
       <div className="flex items-center gap-2">
+        {/* AI Pitch Button */}
         <button
           onClick={handleGeneratePitch}
           disabled={!onGeneratePitch || creditsRemaining <= 0 || isGenerating}
@@ -127,6 +144,7 @@ export default function JobCard({ lead, onGeneratePitch, creditsRemaining = 3 }:
           )}
         </button>
 
+        {/* Apply Link */}
         <a
           href={lead.url}
           target="_blank"
@@ -136,6 +154,7 @@ export default function JobCard({ lead, onGeneratePitch, creditsRemaining = 3 }:
           <ExternalLink className="w-4 h-4" /> Apply
         </a>
 
+        {/* Save Button */}
         <button
           onClick={() => {
             setIsSaved(!isSaved);
@@ -147,6 +166,7 @@ export default function JobCard({ lead, onGeneratePitch, creditsRemaining = 3 }:
         </button>
       </div>
 
+      {/* Credit Warning */}
       {creditsRemaining <= 0 && (
         <p className="text-xs text-amber-600 mt-3 flex items-center gap-1">
           <Zap className="w-3.5 h-3.5" /> No credits – upgrade to generate AI pitches
