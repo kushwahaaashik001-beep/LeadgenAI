@@ -7,28 +7,24 @@ import UpgradeModal from '@/components/UpgradeModal';
 import SearchBar from '@/components/SearchBar';
 import SkillFilter from '@/components/SkillFilter';
 import { toast } from 'react-hot-toast';
-import { Sparkles, Zap, TrendingUp, Crown, Check, Loader } from 'lucide-react';
-
-// Razorpay types
-declare global {
-  interface Window {
-    Razorpay: any;
-  }
-}
+import { Crown, TrendingUp, Check, Loader, LogIn, UserPlus } from 'lucide-react';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 export default function HomePage() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [filteredLeads, setFilteredLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [isProModalOpen, setIsProModalOpen] = useState(false);
-  const [credits] = useState(3); // Demo credits
+  const [credits] = useState(3);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSkill, setSelectedSkill] = useState<string | null>(null);
   const [availableSkills, setAvailableSkills] = useState<string[]>([]);
   const [paymentLoading, setPaymentLoading] = useState(false);
-
-  // ✅ Get current user from Supabase (if authenticated)
   const [user, setUser] = useState<any>(null);
+  const router = useRouter();
+
+  // Fetch user session
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
@@ -39,6 +35,7 @@ export default function HomePage() {
     return () => listener?.subscription.unsubscribe();
   }, []);
 
+  // Fetch leads
   useEffect(() => {
     const fetchLeads = async () => {
       setLoading(true);
@@ -84,6 +81,7 @@ export default function HomePage() {
     };
   }, []);
 
+  // Filter logic
   useEffect(() => {
     let filtered = leads;
 
@@ -105,6 +103,11 @@ export default function HomePage() {
   }, [searchQuery, selectedSkill, leads]);
 
   const handleGeneratePitch = async (lead: Lead) => {
+    if (!user) {
+      toast.error('Please login to generate AI pitch');
+      router.push('/login');
+      return;
+    }
     if (credits <= 0) {
       setIsProModalOpen(true);
       return;
@@ -112,7 +115,7 @@ export default function HomePage() {
     toast.success(`✨ Demo: AI Pitch for "${lead.title}" (1 credit used)`);
   };
 
-  // ✅ Load Razorpay script dynamically
+  // Razorpay integration
   const loadRazorpayScript = () => {
     return new Promise((resolve) => {
       const script = document.createElement('script');
@@ -122,11 +125,10 @@ export default function HomePage() {
     });
   };
 
-  // ✅ Handle upgrade button click
   const handleUpgrade = async () => {
     if (!user) {
       toast.error('Please login first');
-      // Optionally redirect to login page
+      router.push('/login');
       return;
     }
 
@@ -134,12 +136,10 @@ export default function HomePage() {
     try {
       await loadRazorpayScript();
 
-      // 1. Create order from backend
       const res = await fetch('/api/create-order', { method: 'POST' });
       const order = await res.json();
       if (!res.ok) throw new Error(order.error);
 
-      // 2. Razorpay options
       const options = {
         key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
         amount: order.amount,
@@ -148,10 +148,8 @@ export default function HomePage() {
         description: 'Pro Monthly Subscription',
         order_id: order.orderId,
         handler: async (response: any) => {
-          // Payment successful
           toast.success('Payment successful! Activating Pro...');
 
-          // 3. Update user as Pro in Supabase
           const { error: updateError } = await supabase
             .from('profiles')
             .update({ is_pro: true, pro_expiry: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) })
@@ -162,7 +160,7 @@ export default function HomePage() {
             toast.error('Failed to activate Pro. Contact support.');
           } else {
             toast.success('You are now a Pro user!');
-            // Refresh user state or redirect
+            // Refresh user or update local state
           }
         },
         prefill: {
@@ -184,10 +182,39 @@ export default function HomePage() {
     }
   };
 
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    router.push('/');
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
-      {/* Upgrade Modal (optional) – you can remove it or keep as fallback */}
-      <UpgradeModal isOpen={isProModalOpen} onClose={() => setIsProModalOpen(false)} />
+      {/* Auth Buttons (Top Right) */}
+      <div className="absolute top-4 right-4 flex gap-2">
+        {user ? (
+          <button
+            onClick={handleLogout}
+            className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm hover:bg-red-700 transition"
+          >
+            Logout
+          </button>
+        ) : (
+          <>
+            <Link
+              href="/login"
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition flex items-center gap-1"
+            >
+              <LogIn className="w-4 h-4" /> Login
+            </Link>
+            <Link
+              href="/signup"
+              className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700 transition flex items-center gap-1"
+            >
+              <UserPlus className="w-4 h-4" /> Signup
+            </Link>
+          </>
+        )}
+      </div>
 
       {/* Hero Section */}
       <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white">
