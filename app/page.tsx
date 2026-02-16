@@ -7,7 +7,14 @@ import UpgradeModal from '@/components/UpgradeModal';
 import SearchBar from '@/components/SearchBar';
 import SkillFilter from '@/components/SkillFilter';
 import { toast } from 'react-hot-toast';
-import { Sparkles, Zap, TrendingUp, Crown, Check } from 'lucide-react';
+import { Sparkles, Zap, TrendingUp, Crown, Check, Loader } from 'lucide-react';
+
+// Razorpay types
+declare global {
+  interface Window {
+    Razorpay: any;
+  }
+}
 
 export default function HomePage() {
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -18,6 +25,19 @@ export default function HomePage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSkill, setSelectedSkill] = useState<string | null>(null);
   const [availableSkills, setAvailableSkills] = useState<string[]>([]);
+  const [paymentLoading, setPaymentLoading] = useState(false);
+
+  // ✅ Get current user from Supabase (if authenticated)
+  const [user, setUser] = useState<any>(null);
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+    });
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+    return () => listener?.subscription.unsubscribe();
+  }, []);
 
   useEffect(() => {
     const fetchLeads = async () => {
@@ -33,7 +53,6 @@ export default function HomePage() {
         setLeads(data || []);
         setFilteredLeads(data || []);
 
-        // Extract unique skills for filter
         const skills = data?.map(l => l.skill).filter(Boolean) as string[];
         setAvailableSkills([...new Set(skills)]);
       } catch (err) {
@@ -65,7 +84,6 @@ export default function HomePage() {
     };
   }, []);
 
-  // Apply filters whenever search query or skill changes
   useEffect(() => {
     let filtered = leads;
 
@@ -94,8 +112,81 @@ export default function HomePage() {
     toast.success(`✨ Demo: AI Pitch for "${lead.title}" (1 credit used)`);
   };
 
+  // ✅ Load Razorpay script dynamically
+  const loadRazorpayScript = () => {
+    return new Promise((resolve) => {
+      const script = document.createElement('script');
+      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+      script.onload = resolve;
+      document.body.appendChild(script);
+    });
+  };
+
+  // ✅ Handle upgrade button click
+  const handleUpgrade = async () => {
+    if (!user) {
+      toast.error('Please login first');
+      // Optionally redirect to login page
+      return;
+    }
+
+    setPaymentLoading(true);
+    try {
+      await loadRazorpayScript();
+
+      // 1. Create order from backend
+      const res = await fetch('/api/create-order', { method: 'POST' });
+      const order = await res.json();
+      if (!res.ok) throw new Error(order.error);
+
+      // 2. Razorpay options
+      const options = {
+        key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
+        amount: order.amount,
+        currency: order.currency,
+        name: 'LeadGenAI',
+        description: 'Pro Monthly Subscription',
+        order_id: order.orderId,
+        handler: async (response: any) => {
+          // Payment successful
+          toast.success('Payment successful! Activating Pro...');
+
+          // 3. Update user as Pro in Supabase
+          const { error: updateError } = await supabase
+            .from('profiles')
+            .update({ is_pro: true, pro_expiry: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) })
+            .eq('id', user.id);
+
+          if (updateError) {
+            console.error('Error updating profile:', updateError);
+            toast.error('Failed to activate Pro. Contact support.');
+          } else {
+            toast.success('You are now a Pro user!');
+            // Refresh user state or redirect
+          }
+        },
+        prefill: {
+          name: user.email,
+          email: user.email,
+        },
+        theme: {
+          color: '#4f46e5',
+        },
+      };
+
+      const razorpay = new window.Razorpay(options);
+      razorpay.open();
+    } catch (error) {
+      console.error('Payment error:', error);
+      toast.error('Payment failed. Please try again.');
+    } finally {
+      setPaymentLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
+      {/* Upgrade Modal (optional) – you can remove it or keep as fallback */}
       <UpgradeModal isOpen={isProModalOpen} onClose={() => setIsProModalOpen(false)} />
 
       {/* Hero Section */}
@@ -125,10 +216,18 @@ export default function HomePage() {
               </div>
             </div>
             <button
-              onClick={() => setIsProModalOpen(true)}
-              className="px-6 py-3 bg-white text-orange-600 rounded-xl font-bold hover:bg-orange-50 transition-colors shadow-lg"
+              onClick={handleUpgrade}
+              disabled={paymentLoading}
+              className="px-6 py-3 bg-white text-orange-600 rounded-xl font-bold hover:bg-orange-50 transition-colors shadow-lg flex items-center gap-2"
             >
-              Upgrade Now →
+              {paymentLoading ? (
+                <>
+                  <Loader className="w-4 h-4 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                'Upgrade Now →'
+              )}
             </button>
           </div>
         </div>
@@ -208,10 +307,18 @@ export default function HomePage() {
                   </li>
                 </ul>
                 <button
-                  onClick={() => setIsProModalOpen(true)}
-                  className="w-full py-3 bg-gradient-to-r from-yellow-400 to-orange-500 text-gray-900 rounded-xl font-bold hover:from-yellow-500 hover:to-orange-600 transition-all shadow-lg"
+                  onClick={handleUpgrade}
+                  disabled={paymentLoading}
+                  className="w-full py-3 bg-gradient-to-r from-yellow-400 to-orange-500 text-gray-900 rounded-xl font-bold hover:from-yellow-500 hover:to-orange-600 transition-all shadow-lg flex items-center justify-center gap-2"
                 >
-                  Upgrade – $29/month
+                  {paymentLoading ? (
+                    <>
+                      <Loader className="w-4 h-4 animate-spin" />
+                      Processing...
+                    </>
+                  ) : (
+                    'Upgrade – ₹29/month'
+                  )}
                 </button>
                 <p className="text-xs text-indigo-200 text-center mt-3">
                   Cancel anytime. No questions asked.
