@@ -1,47 +1,61 @@
 'use client';
 
 import { useState } from 'react';
-import { Filter } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 
-interface SkillFilterProps {
-  skills: string[];
-  onFilterChange: (selectedSkill: string | null) => void;
+interface SkillSwitcherProps {
+  selectedSkill: string;
+  onSkillChange: (skill: string) => void;
 }
 
-export default function SkillFilter({ skills, onFilterChange }: SkillFilterProps) {
-  const [selected, setSelected] = useState<string | null>(null);
+export default function SkillSwitcher({ selectedSkill, onSkillChange }: SkillSwitcherProps) {
+  const [isOpen, setIsOpen] = useState(false);
 
-  const handleChange = (skill: string | null) => {
-    setSelected(skill);
-    onFilterChange(skill);
+  const skills = [
+    'all',
+    'React Developer',
+    'Full Stack Developer',
+    'Frontend Developer',
+    'Backend Developer',
+    'DevOps Engineer',
+    'Data Scientist',
+    'AI/ML Engineer',
+    'Mobile App Developer',
+    'UI/UX Designer',
+    'Product Manager',
+    'Digital Marketer',
+  ];
+
+  const handleSelect = (skill: string) => {
+    onSkillChange(skill);
+    setIsOpen(false);
   };
 
   return (
-    <div className="flex items-center gap-2 flex-wrap">
-      <Filter className="w-4 h-4 text-slate-500" />
+    <div className="relative">
       <button
-        onClick={() => handleChange(null)}
-        className={`px-3 py-1 rounded-full text-sm ${
-          selected === null
-            ? 'bg-blue-600 text-white'
-            : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-        }`}
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full flex items-center justify-between px-4 py-2 bg-white border border-slate-200 rounded-lg text-slate-700 hover:border-blue-300 focus:outline-none"
       >
-        All
+        <span>{selectedSkill === 'all' ? 'All Skills' : selectedSkill}</span>
+        <ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
       </button>
-      {skills.map((skill) => (
-        <button
-          key={skill}
-          onClick={() => handleChange(skill)}
-          className={`px-3 py-1 rounded-full text-sm ${
-            selected === skill
-              ? 'bg-blue-600 text-white'
-              : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-          }`}
-        >
-          {skill}
-        </button>
-      ))}
+
+      {isOpen && (
+        <div className="absolute z-10 mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+          {skills.map((skill) => (
+            <button
+              key={skill}
+              onClick={() => handleSelect(skill)}
+              className={`w-full text-left px-4 py-2 hover:bg-blue-50 ${
+                selectedSkill === skill ? 'bg-blue-100 text-blue-700' : 'text-slate-700'
+              }`}
+            >
+              {skill === 'all' ? 'All Skills' : skill}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
