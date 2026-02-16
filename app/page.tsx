@@ -4,14 +4,20 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import JobCard, { Lead } from '@/components/JobCard';
 import UpgradeModal from '@/components/UpgradeModal';
+import SearchBar from '@/components/SearchBar';
+import SkillFilter from '@/components/SkillFilter';
 import { toast } from 'react-hot-toast';
 import { Sparkles, Zap, TrendingUp, Crown, Check } from 'lucide-react';
 
 export default function HomePage() {
   const [leads, setLeads] = useState<Lead[]>([]);
+  const [filteredLeads, setFilteredLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [isProModalOpen, setIsProModalOpen] = useState(false);
-  const [credits] = useState(3); // Demo credits – replace with real user context later
+  const [credits] = useState(3); // Demo credits
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedSkill, setSelectedSkill] = useState<string | null>(null);
+  const [availableSkills, setAvailableSkills] = useState<string[]>([]);
 
   useEffect(() => {
     const fetchLeads = async () => {
@@ -21,10 +27,15 @@ export default function HomePage() {
           .from('leads')
           .select('*')
           .order('created_at', { ascending: false })
-          .limit(20);
+          .limit(50);
 
         if (error) throw error;
         setLeads(data || []);
+        setFilteredLeads(data || []);
+
+        // Extract unique skills for filter
+        const skills = data?.map(l => l.skill).filter(Boolean) as string[];
+        setAvailableSkills([...new Set(skills)]);
       } catch (err) {
         console.error('Error fetching leads:', err);
         toast.error('Failed to load leads');
@@ -43,6 +54,7 @@ export default function HomePage() {
         (payload) => {
           const newLead = payload.new as Lead;
           setLeads((prev) => [newLead, ...prev]);
+          setFilteredLeads((prev) => [newLead, ...prev]);
           toast.success('🔥 New lead arrived!');
         }
       )
@@ -53,19 +65,37 @@ export default function HomePage() {
     };
   }, []);
 
-  // Demo AI Pitch – opens upgrade modal if no credits (simulated)
+  // Apply filters whenever search query or skill changes
+  useEffect(() => {
+    let filtered = leads;
+
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      filtered = filtered.filter(
+        (lead) =>
+          lead.title?.toLowerCase().includes(q) ||
+          lead.description?.toLowerCase().includes(q) ||
+          lead.skill?.toLowerCase().includes(q)
+      );
+    }
+
+    if (selectedSkill) {
+      filtered = filtered.filter((lead) => lead.skill === selectedSkill);
+    }
+
+    setFilteredLeads(filtered);
+  }, [searchQuery, selectedSkill, leads]);
+
   const handleGeneratePitch = async (lead: Lead) => {
     if (credits <= 0) {
       setIsProModalOpen(true);
       return;
     }
     toast.success(`✨ Demo: AI Pitch for "${lead.title}" (1 credit used)`);
-    // In real app, you would call API and deduct credits
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
-      {/* Upgrade Modal */}
       <UpgradeModal isOpen={isProModalOpen} onClose={() => setIsProModalOpen(false)} />
 
       {/* Hero Section */}
@@ -103,14 +133,28 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* Two Column Layout: Leads + Pro Features */}
+        {/* Search and Filter Row */}
+        <div className="mb-6 flex flex-col md:flex-row gap-4 items-start md:items-center">
+          <div className="w-full md:w-64">
+            <SearchBar onSearch={setSearchQuery} placeholder="Search by title, skill..." />
+          </div>
+          <div className="flex-1">
+            {availableSkills.length > 0 && (
+              <SkillFilter skills={availableSkills} onFilterChange={setSelectedSkill} />
+            )}
+          </div>
+        </div>
+
+        {/* Two Column Layout */}
         <div className="flex flex-col lg:flex-row gap-8">
           {/* Leads Feed */}
           <section className="w-full lg:w-2/3">
             <div className="flex justify-between items-center mb-6">
-              <h2 className="text-2xl font-bold text-slate-900">Latest Opportunities</h2>
+              <h2 className="text-2xl font-bold text-slate-900">
+                {selectedSkill ? `${selectedSkill} Opportunities` : 'Latest Opportunities'}
+              </h2>
               <span className="text-sm text-slate-500 bg-white px-4 py-2 rounded-lg border border-slate-200 shadow-sm">
-                {leads.length} fresh leads
+                {filteredLeads.length} {filteredLeads.length === 1 ? 'lead' : 'leads'}
               </span>
             </div>
 
@@ -118,18 +162,18 @@ export default function HomePage() {
               <div className="flex justify-center py-20">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" />
               </div>
-            ) : leads.length === 0 ? (
+            ) : filteredLeads.length === 0 ? (
               <div className="bg-white rounded-2xl p-12 text-center border border-slate-200">
-                <p className="text-slate-500">No leads yet. Check back soon!</p>
+                <p className="text-slate-500">No leads match your filters.</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {leads.map((lead) => (
+                {filteredLeads.map((lead) => (
                   <JobCard
                     key={lead.id}
                     lead={lead}
                     onGeneratePitch={handleGeneratePitch}
-                    creditsRemaining={credits}   // Demo: 3 credits
+                    creditsRemaining={credits}
                   />
                 ))}
               </div>
@@ -174,7 +218,7 @@ export default function HomePage() {
                 </p>
               </div>
 
-              {/* Quick Stats (optional) */}
+              {/* Quick Stats */}
               <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
                 <h4 className="font-semibold text-slate-800 mb-3 flex items-center gap-2">
                   <TrendingUp className="w-4 h-4 text-blue-500" /> Today's Stats
@@ -182,11 +226,13 @@ export default function HomePage() {
                 <div className="space-y-2">
                   <div className="flex justify-between text-sm">
                     <span className="text-slate-600">New Leads</span>
-                    <span className="font-bold text-slate-900">24</span>
+                    <span className="font-bold text-slate-900">{leads.length}</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-slate-600">Avg. Budget</span>
-                    <span className="font-bold text-slate-900">$850</span>
+                    <span className="font-bold text-slate-900">
+                      ${Math.round(leads.reduce((acc, l) => acc + (l.budget_numeric || 0), 0) / (leads.length || 1))}
+                    </span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-slate-600">Pro Users</span>
