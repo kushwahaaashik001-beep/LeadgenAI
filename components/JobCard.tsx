@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { ExternalLink, Zap, Sparkles, Bookmark, Star } from 'lucide-react';
 import { useState } from 'react';
 import toast from 'react-hot-toast';
+import { getTimeAgo, formatBudget } from '@/lib/utils';
 
 export interface Lead {
   id: string;
@@ -22,7 +23,7 @@ interface JobCardProps {
   lead: Lead;
   onGeneratePitch?: (lead: Lead) => Promise<void>;
   creditsRemaining?: number;
-  // Old props – kept for backward compatibility (won't break if passed)
+  // Optional old props for compatibility
   onContacted?: (id: string) => void;
   onInterview?: (id: string) => void;
   onRejected?: (id: string) => void;
@@ -35,7 +36,6 @@ export default function JobCard({
   lead, 
   onGeneratePitch, 
   creditsRemaining = 3,
-  ...rest // accept any other props without using them
 }: JobCardProps) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
@@ -55,21 +55,6 @@ export default function JobCard({
     }
   };
 
-  const formatBudget = () => {
-    if (!lead.budget_numeric) return 'Negotiable';
-    return `${lead.budget_currency || '$'}${lead.budget_numeric}`;
-  };
-
-  const getTimeAgo = () => {
-    const date = new Date(lead.created_at);
-    const now = new Date();
-    const diffDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
-    if (diffDays === 0) return 'Today';
-    if (diffDays === 1) return 'Yesterday';
-    if (diffDays < 7) return `${diffDays} days ago`;
-    return `${Math.floor(diffDays / 7)} weeks ago`;
-  };
-
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -85,11 +70,11 @@ export default function JobCard({
             <span className="bg-blue-100 text-blue-700 text-xs px-2 py-0.5 rounded-full border border-blue-200">
               {lead.platform || 'Direct'}
             </span>
-            <span className="text-xs text-slate-500">{getTimeAgo()}</span>
+            <span className="text-xs text-slate-500">{getTimeAgo(lead.created_at)}</span>
           </div>
         </div>
         <div className="text-right">
-          <div className="text-green-600 font-bold text-lg">{formatBudget()}</div>
+          <div className="text-green-600 font-bold text-lg">{formatBudget(lead)}</div>
           <div className="text-xs text-slate-400">{lead.budget_currency || 'USD'}</div>
         </div>
       </div>
