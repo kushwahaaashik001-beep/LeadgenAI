@@ -152,32 +152,32 @@ export default function HomePage() {
     setFilteredLeads(filtered);
   }, [searchQuery, selectedSkill, leads]);
 
-  // ✅ Updated generate pitch handler with login-first logic
+  // ✅ Final login-first pitch handler
   const handleGeneratePitch = async (lead: Lead) => {
-    // Step 1: Check if user is logged in
+    // 1. Agar user login nahi hai, to seedha signup page bhejo
     if (!user) {
       toast.error('Pehle account banayein ya login karein!', {
         icon: '🔒',
         duration: 4000,
       });
-      // Redirect to signup page, but remember which lead they wanted
+      // Optionally store lead id for later use
       sessionStorage.setItem('pendingLeadId', lead.id);
       router.push('/signup');
       return;
     }
 
-    // Step 2: Check credits
+    // 2. Login hai to credits check karo
     if (credits <= 0) {
       setIsProModalOpen(true);
       return;
     }
 
-    // Step 3: All good – generate pitch (demo for now)
+    // 3. Sab kuch sahi hai – ab AI pitch generate karo (demo)
     toast.success(`✨ Generating AI Pitch for "${lead.title}"...`);
-    // Here you would call your actual API endpoint
+    // Yahan asli API call karo
   };
 
-  // Razorpay integration
+  // Razorpay integration (unchanged)
   const loadRazorpayScript = () => {
     return new Promise((resolve) => {
       const script = document.createElement('script');
@@ -286,7 +286,7 @@ export default function HomePage() {
         )}
       </div>
 
-      {/* Hero Section */}
+      {/* Hero Section (unchanged) */}
       <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
           <h1 className="text-4xl md:text-5xl font-bold mb-4">
@@ -300,7 +300,7 @@ export default function HomePage() {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Pro Upsell Banner */}
+        {/* Pro Upsell Banner (unchanged) */}
         <div className="mb-8 bg-gradient-to-r from-amber-500 to-orange-500 rounded-2xl p-6 text-white shadow-lg">
           <div className="flex flex-col md:flex-row items-center justify-between">
             <div className="flex items-center gap-4 mb-4 md:mb-0">
@@ -329,7 +329,7 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* Search and Filter Row */}
+        {/* Search and Filter Row (unchanged) */}
         <div className="mb-6 flex flex-col md:flex-row gap-4 items-start md:items-center">
           <div className="w-full md:w-64">
             <SearchBar onSearch={setSearchQuery} placeholder="Search by title, skill..." />
@@ -370,7 +370,7 @@ export default function HomePage() {
                     lead={lead}
                     onGeneratePitch={handleGeneratePitch}
                     creditsRemaining={credits}
-                    // ✅ Pass login status to JobCard for conditional UI
+                    // ✅ Important: pass login status so JobCard can show correct button text
                     isLoggedIn={!!user}
                   />
                 ))}
@@ -378,7 +378,7 @@ export default function HomePage() {
             )}
           </section>
 
-          {/* Sidebar – Pro Features */}
+          {/* Sidebar (unchanged) */}
           <aside className="w-full lg:w-1/3">
             <div className="sticky top-20 space-y-6">
               {/* Pro Feature Card */}
