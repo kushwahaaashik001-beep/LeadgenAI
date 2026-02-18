@@ -23,6 +23,7 @@ interface JobCardProps {
   lead: Lead;
   onGeneratePitch?: (lead: Lead) => Promise<void>;
   creditsRemaining?: number;
+  isLoggedIn?: boolean; // ✅ New prop from page.tsx
   // Optional old props for compatibility
   onContacted?: (id: string) => void;
   onInterview?: (id: string) => void;
@@ -36,6 +37,7 @@ export default function JobCard({
   lead, 
   onGeneratePitch, 
   creditsRemaining = 3,
+  isLoggedIn = false, // Default to false
 }: JobCardProps) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSaved, setIsSaved] = useState(false);
@@ -43,7 +45,7 @@ export default function JobCard({
   if (!lead) return null;
 
   const handleGeneratePitch = async () => {
-    if (!onGeneratePitch || creditsRemaining <= 0 || isGenerating) return;
+    if (!onGeneratePitch || isGenerating) return; // Remove credit check here; parent handles it
     setIsGenerating(true);
     try {
       await onGeneratePitch(lead);
@@ -54,6 +56,17 @@ export default function JobCard({
       setIsGenerating(false);
     }
   };
+
+  // Determine button text based on login and credits
+  let buttonText = 'Generate AI Pitch';
+  let showCreditBadge = true;
+  if (!isLoggedIn) {
+    buttonText = 'Login to Generate';
+    showCreditBadge = false;
+  } else if (creditsRemaining <= 0) {
+    buttonText = 'Upgrade to Generate';
+    showCreditBadge = false;
+  }
 
   return (
     <motion.div
@@ -99,32 +112,31 @@ export default function JobCard({
         {/* AI Pitch Button */}
         <button
           onClick={handleGeneratePitch}
-          disabled={!onGeneratePitch || creditsRemaining <= 0 || isGenerating}
+          disabled={isGenerating} // Only disable when generating; parent handles logic
           className={`
             flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm
             transition-all active:scale-[0.98]
             ${
-              creditsRemaining > 0
-                ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-200 hover:shadow-lg'
-                : 'bg-gradient-to-r from-amber-600 to-orange-600 text-white shadow-md shadow-amber-200'
+              !isLoggedIn
+                ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-md shadow-blue-200' // Login button style
+                : creditsRemaining > 0
+                  ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-200 hover:shadow-lg'
+                  : 'bg-gradient-to-r from-amber-600 to-orange-600 text-white shadow-md shadow-amber-200'
             }
             disabled:opacity-50 disabled:cursor-not-allowed
           `}
         >
           {isGenerating ? (
             <span className="animate-spin">⚡</span>
-          ) : creditsRemaining > 0 ? (
-            <>
-              <Sparkles className="w-4 h-4" />
-              Generate AI Pitch
-              <span className="ml-1 bg-white/20 px-1.5 py-0.5 rounded-full text-[10px]">
-                {creditsRemaining} left
-              </span>
-            </>
           ) : (
             <>
-              <Zap className="w-4 h-4" />
-              Upgrade to Generate
+              <Sparkles className="w-4 h-4" />
+              {buttonText}
+              {showCreditBadge && creditsRemaining > 0 && (
+                <span className="ml-1 bg-white/20 px-1.5 py-0.5 rounded-full text-[10px]">
+                  {creditsRemaining} left
+                </span>
+              )}
             </>
           )}
         </button>
@@ -151,8 +163,8 @@ export default function JobCard({
         </button>
       </div>
 
-      {/* Credit Warning */}
-      {creditsRemaining <= 0 && (
+      {/* Credit Warning (only for logged-in users with no credits) */}
+      {isLoggedIn && creditsRemaining <= 0 && (
         <p className="text-xs text-amber-600 mt-3 flex items-center gap-1">
           <Zap className="w-3.5 h-3.5" /> No credits – upgrade to generate AI pitches
         </p>
