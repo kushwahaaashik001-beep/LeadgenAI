@@ -19,6 +19,7 @@ function DashboardContent() {
   const [selectedSkill, setSelectedSkill] = useState<string>('all');
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
+  const [paymentLoading, setPaymentLoading] = useState(false); // For UpgradeModal
 
   useEffect(() => {
     const fetchUserAndLeads = async () => {
@@ -112,6 +113,17 @@ function DashboardContent() {
     }
   };
 
+  // ✅ Add upgrade handler (stub for demo mode)
+  const handleUpgrade = () => {
+    setPaymentLoading(true);
+    // Simulate payment processing
+    setTimeout(() => {
+      toast.error('Upgrade not available in demo mode');
+      setPaymentLoading(false);
+      setIsProModalOpen(false);
+    }, 1000);
+  };
+
   const totalLeads = leads.length;
   const creditsUsed = 3 - credits;
   const estimatedRevenue = creditsUsed * 5;
@@ -119,7 +131,13 @@ function DashboardContent() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
       <Navbar onOpenPro={() => setIsProModalOpen(true)} creditsLeft={credits} />
-      <UpgradeModal isOpen={isProModalOpen} onClose={() => setIsProModalOpen(false)} />
+      {/* ✅ Pass required props to UpgradeModal */}
+      <UpgradeModal
+        isOpen={isProModalOpen}
+        onClose={() => setIsProModalOpen(false)}
+        onUpgrade={handleUpgrade}
+        loading={paymentLoading}
+      />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Stats Cards */}
