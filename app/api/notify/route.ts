@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { sendLeadNotification } from '@/lib/notifications';
-import type { LeadNotification } from '@/lib/notifications';
 
-// Define expected lead shape (matches LeadNotification but allows number for budget)
+// Define expected lead shape (allows string or number for budget)
 const leadSchema = z.object({
   id: z.string().min(1),
   title: z.string().min(1),
@@ -48,14 +47,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // 4. Transform lead to match LeadNotification type (ensure budget is string)
-    const notificationLead: LeadNotification = {
+    // 4. Prepare lead data for notification (convert budget to string if needed)
+    const notificationLead = {
       id: lead.id,
       title: lead.title,
       company: lead.company,
       description: lead.description,
       url: lead.url,
-      // Convert budget to string if it's a number
       budget: lead.budget !== undefined ? String(lead.budget) : undefined,
       skill: lead.skill,
     };
