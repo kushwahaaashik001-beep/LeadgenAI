@@ -16,9 +16,9 @@ interface AIPitchModalProps {
   onClose: () => void;
   pitch: string;
   lead: Lead;
-  onRegenerate?: () => Promise<string>;
+  onRegenerate?: () => Promise<void>;   // ✅ FIXED: no return value needed
   onSave?: (pitch: string) => Promise<void>;
-  isRegenerating?: boolean; // from parent to show loading state
+  isRegenerating?: boolean;
 }
 
 interface PitchVersion {
@@ -70,7 +70,6 @@ export default function AIPitchModal({
     if (pitch) {
       setCurrentPitch(pitch);
       setPitchVersions(prev => {
-        // Avoid duplicate if same content
         if (prev[0]?.content === pitch) return prev;
         return [{ id: Date.now(), content: pitch, timestamp: new Date().toLocaleTimeString() }, ...prev];
       });
@@ -107,8 +106,7 @@ export default function AIPitchModal({
 
     setIsGenerating(true);
     try {
-      const newPitch = await onRegenerate();
-      // The parent will update pitch prop, which will trigger useEffect
+      await onRegenerate();   // ✅ just await, no return value expected
       toast.success('Pitch regenerated successfully!');
     } catch (error) {
       toast.error('Failed to regenerate pitch');
@@ -173,7 +171,6 @@ export default function AIPitchModal({
     }
     setRating(stars);
     toast.success(`Rated ${stars} stars!`);
-    // Update the rating in the current version
     setPitchVersions(prev => prev.map((version, index) =>
       index === 0 ? { ...version, rating: stars } : version
     ));
@@ -183,7 +180,7 @@ export default function AIPitchModal({
   const calculateStats = (text: string) => {
     const words = text.split(/\s+/).length;
     const sentences = text.split(/[.!?]+/).length - 1;
-    const readingTime = Math.ceil(words / 200); // 200 words per minute
+    const readingTime = Math.ceil(words / 200);
     const keywords = ['experienced', 'passionate', 'skilled', 'proven', 'expert'].filter(word =>
       text.toLowerCase().includes(word)
     ).length;
@@ -412,7 +409,34 @@ export default function AIPitchModal({
                 {showSettings && (
                   <div className="lg:hidden p-4 bg-gray-900/50 border-b border-gray-800 max-h-80 overflow-y-auto">
                     {/* Simplified version of left panel for mobile */}
-                    {/* ... you can include a condensed version of the controls */}
+                    <div className="space-y-4">
+                      <div className="p-3 bg-gray-800/30 rounded-xl">
+                        <h4 className="font-semibold text-white mb-2">Lead Info</h4>
+                        <p className="text-sm text-gray-300">{lead.company} – {lead.title}</p>
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-400">Tone</label>
+                        <select
+                          value={selectedTone}
+                          onChange={(e) => setSelectedTone(e.target.value)}
+                          disabled={!isPro}
+                          className="w-full bg-gray-800 text-white rounded p-2 mt-1"
+                        >
+                          {PITCH_TONES.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-400">Length</label>
+                        <select
+                          value={selectedLength}
+                          onChange={(e) => setSelectedLength(e.target.value)}
+                          disabled={!isPro}
+                          className="w-full bg-gray-800 text-white rounded p-2 mt-1"
+                        >
+                          {PITCH_LENGTHS.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                        </select>
+                      </div>
+                    </div>
                   </div>
                 )}
 
