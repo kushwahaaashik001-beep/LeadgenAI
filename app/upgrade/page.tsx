@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Script from 'next/script';
-import UpgradeModal from '@/components/upgratemodel'; // Path sahi check kar lena
+import UpgradeModal from '@/compenet/upgratemodel'; // Path sahi check kar lena
 
 export default function UpgradePage() {
   const [isModalOpen, setIsModalOpen] = useState(true);
