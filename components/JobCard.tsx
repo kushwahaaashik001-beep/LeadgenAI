@@ -40,6 +40,7 @@ export default function JobCard({
   const [credits, setCredits] = useState(initialCredits);
   const [isSaved, setIsSaved] = useState(false);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [upgradeLoading, setUpgradeLoading] = useState(false);
 
   if (!lead) return null;
 
@@ -70,6 +71,17 @@ export default function JobCard({
     } finally {
       setIsApplying(false);
     }
+  };
+
+  const handleUpgrade = () => {
+    setUpgradeLoading(true);
+    // Simulate upgrade process – in real app, this would call a parent handler or redirect to pricing
+    setTimeout(() => {
+      setUpgradeLoading(false);
+      setShowUpgradeModal(false);
+      toast.success('Upgrade flow started – redirecting...');
+      // You can add actual upgrade logic here, e.g., window.location.href = '/pricing';
+    }, 1000);
   };
 
   const isPro = userPlan === 'PRO';
@@ -177,6 +189,8 @@ export default function JobCard({
       <UpgradeModal 
         isOpen={showUpgradeModal} 
         onClose={() => setShowUpgradeModal(false)} 
+        onUpgrade={handleUpgrade}
+        loading={upgradeLoading}
       />
     </motion.div>
   );
