@@ -16,23 +16,26 @@ const DEMO_USER_ID = '00000000-0000-0000-0000-000000000000';
 function DashboardContent() {
   const [isProModalOpen, setIsProModalOpen] = useState(false);
   const [credits, setCredits] = useState(3);
+  const [isPro, setIsPro] = useState(false); // for userPlan
   const [selectedSkill, setSelectedSkill] = useState<string>('all');
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
-  const [paymentLoading, setPaymentLoading] = useState(false); // For UpgradeModal
+  const [paymentLoading, setPaymentLoading] = useState(false);
 
+  // Fetch user credits and pro status
   useEffect(() => {
     const fetchUserAndLeads = async () => {
       setLoading(true);
       try {
         const { data: profile, error: profileError } = await supabase
           .from('profiles')
-          .select('credits')
+          .select('credits, is_pro')
           .eq('id', DEMO_USER_ID)
           .single();
 
         if (!profileError && profile) {
           setCredits(profile.credits);
+          setIsPro(profile.is_pro);
         }
 
         let query = supabase
@@ -65,6 +68,7 @@ function DashboardContent() {
     fetchUserAndLeads();
   }, [selectedSkill]);
 
+  // Realtime subscription for new leads
   useEffect(() => {
     const channel = supabase
       .channel(`dashboard-leads-${selectedSkill}`)
@@ -113,10 +117,8 @@ function DashboardContent() {
     }
   };
 
-  // ✅ Add upgrade handler (stub for demo mode)
   const handleUpgrade = () => {
     setPaymentLoading(true);
-    // Simulate payment processing
     setTimeout(() => {
       toast.error('Upgrade not available in demo mode');
       setPaymentLoading(false);
@@ -131,7 +133,6 @@ function DashboardContent() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100">
       <Navbar onOpenPro={() => setIsProModalOpen(true)} creditsLeft={credits} />
-      {/* ✅ Pass required props to UpgradeModal */}
       <UpgradeModal
         isOpen={isProModalOpen}
         onClose={() => setIsProModalOpen(false)}
@@ -140,7 +141,6 @@ function DashboardContent() {
       />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Stats Cards */}
         <div className="mb-8 grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 flex items-center gap-4">
             <div className="p-3 bg-blue-100 rounded-xl"><Zap className="w-6 h-6 text-blue-600" /></div>
@@ -188,7 +188,9 @@ function DashboardContent() {
                     key={lead.id}
                     lead={lead}
                     onGeneratePitch={handleGeneratePitch}
-                    creditsRemaining={credits}
+                    initialCredits={credits}               // ✅ changed from creditsRemaining
+                    isLoggedIn={true}                       // ✅ user is logged in (DEMO)
+                    userPlan={isPro ? 'PRO' : 'FREE'}       // ✅ pass plan based on fetched profile
                   />
                 ))}
               </div>
