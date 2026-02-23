@@ -4,6 +4,8 @@ import './globals.css';
 import { Toaster } from 'react-hot-toast';
 import { Analytics } from '@vercel/analytics/react';
 import { SpeedInsights } from '@vercel/speed-insights/next';
+// 1. AuthProvider ko import karein (Rasta sahi check kar lena apne hisab se)
+import { AuthProvider } from '@/context/AuthContext'; 
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -20,10 +22,13 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`${inter.className} bg-gray-950 text-gray-100 antialiased`} suppressHydrationWarning>
-        {children}
-        <Toaster position="bottom-right" />
-        <Analytics />
-        <SpeedInsights />
+        {/* 2. AuthProvider se baki sabko wrap karein */}
+        <AuthProvider>
+          {children}
+          <Toaster position="bottom-right" />
+          <Analytics />
+          <SpeedInsights />
+        </AuthProvider>
       </body>
     </html>
   );
