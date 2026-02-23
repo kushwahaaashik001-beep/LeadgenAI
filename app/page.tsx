@@ -11,7 +11,7 @@ import { Crown, TrendingUp, Check, Loader, LogIn, UserPlus } from 'lucide-react'
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
-// 🌟 Top 25 in-demand skills (static base)
+// Static skills (fallback)
 const STATIC_SKILLS = [
   "Video Editing", "Motion Graphics", "React.js", "Next.js", 
   "UI/UX Design", "Graphic Design", "Social Media Management",
@@ -36,18 +36,22 @@ export default function HomePage() {
   const [user, setUser] = useState<any>(null);
   const router = useRouter();
 
-  // Fetch user session
+  // 1. Fetch user session on mount and listen to auth changes
   useEffect(() => {
+    // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
     });
+
+    // Listen for future auth changes (login, logout)
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
     });
+
     return () => listener?.subscription.unsubscribe();
   }, []);
 
-  // Fetch profile data (credits, is_pro) when user changes
+  // 2. When user changes, fetch profile (credits, is_pro)
   useEffect(() => {
     const fetchProfile = async () => {
       if (!user) {
@@ -74,7 +78,7 @@ export default function HomePage() {
     fetchProfile();
   }, [user]);
 
-  // Fetch leads and merge skills
+  // 3. Fetch leads and real‑time updates
   useEffect(() => {
     const fetchLeads = async () => {
       setLoading(true);
@@ -89,11 +93,11 @@ export default function HomePage() {
         setLeads(data || []);
         setFilteredLeads(data || []);
 
+        // Merge skills from leads with static list
         const extractedSkills = data
           ?.map(l => l.skill)
           .filter(Boolean) as string[];
         const uniqueExtracted = Array.from(new Set(extractedSkills));
-
         setAvailableSkills(Array.from(new Set([...STATIC_SKILLS, ...uniqueExtracted])));
       } catch (err) {
         console.error('Error fetching leads:', err);
@@ -105,6 +109,7 @@ export default function HomePage() {
 
     fetchLeads();
 
+    // Real‑time subscription for new leads
     const channel = supabase
       .channel('homepage-leads')
       .on(
@@ -131,7 +136,7 @@ export default function HomePage() {
     };
   }, []);
 
-  // Apply filters
+  // 4. Filter leads based on search and skill
   useEffect(() => {
     let filtered = leads;
 
@@ -152,13 +157,10 @@ export default function HomePage() {
     setFilteredLeads(filtered);
   }, [searchQuery, selectedSkill, leads]);
 
-  // ✅ Login-first pitch handler
+  // 5. Handler for AI pitch generation (with login check)
   const handleGeneratePitch = async (lead: Lead) => {
     if (!user) {
-      toast.error('Pehle account banayein ya login karein!', {
-        icon: '🔒',
-        duration: 4000,
-      });
+      toast.error('Pehle account banayein ya login karein!', { icon: '🔒', duration: 4000 });
       sessionStorage.setItem('pendingLeadId', lead.id);
       router.push('/signup');
       return;
@@ -173,7 +175,7 @@ export default function HomePage() {
     // Actual API call would go here
   };
 
-  // Razorpay integration
+  // Razorpay integration (unchanged)
   const loadRazorpayScript = () => {
     return new Promise((resolve) => {
       const script = document.createElement('script');
@@ -233,9 +235,7 @@ export default function HomePage() {
           name: user.email,
           email: user.email,
         },
-        theme: {
-          color: '#4f46e5',
-        },
+        theme: { color: '#4f46e5' },
       };
 
       const razorpay = new (window as any).Razorpay(options);
@@ -365,9 +365,9 @@ export default function HomePage() {
                     key={lead.id}
                     lead={lead}
                     onGeneratePitch={handleGeneratePitch}
-                    initialCredits={credits}           // ✅ renamed from creditsRemaining
-                    isLoggedIn={!!user}                 // ✅ pass login status
-                    userPlan={isPro ? 'PRO' : 'FREE'}   // ✅ pass user plan
+                    initialCredits={credits}
+                    isLoggedIn={!!user}
+                    userPlan={isPro ? 'PRO' : 'FREE'}
                   />
                 ))}
               </div>
