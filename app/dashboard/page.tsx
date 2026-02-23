@@ -2,7 +2,8 @@
 
 import dynamic from 'next/dynamic';
 import { useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import { useRouter } from 'next/navigation';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { toast } from 'react-hot-toast';
 import Navbar from '@/components/Navbar';
 import UpgradeModal from '@/components/UpgradeModal';
@@ -11,26 +12,58 @@ import JobCard, { Lead } from '@/components/JobCard';
 import { Zap, TrendingUp, Crown, Sparkles } from 'lucide-react';
 import { updateUserCredits, logUserActivity } from '@/lib/supabase';
 
-const DEMO_USER_ID = '00000000-0000-0000-0000-000000000000';
-
 function DashboardContent() {
   const [isProModalOpen, setIsProModalOpen] = useState(false);
-  const [credits, setCredits] = useState(3);
-  const [isPro, setIsPro] = useState(false); // for userPlan
+  const [credits, setCredits] = useState(0);
+  const [isPro, setIsPro] = useState(false);
   const [selectedSkill, setSelectedSkill] = useState<string>('all');
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
   const [paymentLoading, setPaymentLoading] = useState(false);
+  const [user, setUser] = useState<any>(null);
+  const [authChecked, setAuthChecked] = useState(false);
 
-  // Fetch user credits and pro status
+  const supabase = createClientComponentClient();
+  const router = useRouter();
+
+  // Check authentication on mount
   useEffect(() => {
+    const checkUser = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        // Not logged in – redirect to login
+        router.push('/login?redirect=/dashboard');
+        return;
+      }
+      setUser(session.user);
+      setAuthChecked(true);
+    };
+    checkUser();
+
+    // Listen for auth changes
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!session) {
+        router.push('/login?redirect=/dashboard');
+      } else {
+        setUser(session.user);
+      }
+    });
+
+    return () => listener?.subscription.unsubscribe();
+  }, [router, supabase]);
+
+  // Fetch user credits and pro status (only when user is set)
+  useEffect(() => {
+    if (!user) return;
+
     const fetchUserAndLeads = async () => {
       setLoading(true);
       try {
+        // Get profile
         const { data: profile, error: profileError } = await supabase
           .from('profiles')
           .select('credits, is_pro')
-          .eq('id', DEMO_USER_ID)
+          .eq('id', user.id)
           .single();
 
         if (!profileError && profile) {
@@ -38,6 +71,7 @@ function DashboardContent() {
           setIsPro(profile.is_pro);
         }
 
+        // Fetch leads
         let query = supabase
           .from('leads')
           .select('*')
@@ -66,9 +100,9 @@ function DashboardContent() {
     };
 
     fetchUserAndLeads();
-  }, [selectedSkill]);
+  }, [user, selectedSkill, supabase]);
 
-  // Realtime subscription for new leads
+  // Real-time subscription for new leads
   useEffect(() => {
     const channel = supabase
       .channel(`dashboard-leads-${selectedSkill}`)
@@ -91,7 +125,7 @@ function DashboardContent() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [selectedSkill]);
+  }, [selectedSkill, supabase]);
 
   const handleGeneratePitch = async (lead: Lead) => {
     if (credits <= 0) {
@@ -101,13 +135,13 @@ function DashboardContent() {
 
     try {
       const newCredits = await updateUserCredits(
-        DEMO_USER_ID,
+        user.id,
         -1,
         'PRO_USAGE',
         `AI Pitch for lead: ${lead.title}`
       );
       setCredits(newCredits);
-      await logUserActivity(DEMO_USER_ID, 'generate_pitch', { lead_id: lead.id });
+      await logUserActivity(user.id, 'generate_pitch', { lead_id: lead.id });
 
       await new Promise((resolve) => setTimeout(resolve, 1000));
       toast.success(`✨ AI Pitch generated! (1 credit used, ${newCredits} left)`);
@@ -119,6 +153,7 @@ function DashboardContent() {
 
   const handleUpgrade = () => {
     setPaymentLoading(true);
+    // Simulate payment flow – replace with real Razorpay integration
     setTimeout(() => {
       toast.error('Upgrade not available in demo mode');
       setPaymentLoading(false);
@@ -126,8 +161,17 @@ function DashboardContent() {
     }, 1000);
   };
 
+  // If auth not checked yet, show nothing or a loader
+  if (!authChecked) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" />
+      </div>
+    );
+  }
+
   const totalLeads = leads.length;
-  const creditsUsed = 3 - credits;
+  const creditsUsed = 3 - credits; // Assuming default 3 credits for free tier
   const estimatedRevenue = creditsUsed * 5;
 
   return (
@@ -141,18 +185,28 @@ function DashboardContent() {
       />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Stats Cards */}
         <div className="mb-8 grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 flex items-center gap-4">
             <div className="p-3 bg-blue-100 rounded-xl"><Zap className="w-6 h-6 text-blue-600" /></div>
-            <div><p className="text-sm text-slate-600">Credits Remaining</p><p className="text-2xl font-bold text-slate-900">{credits} / 3</p></div>
+            <div>
+              <p className="text-sm text-slate-600">Credits Remaining</p>
+              <p className="text-2xl font-bold text-slate-900">{credits} / 3</p>
+            </div>
           </div>
           <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 flex items-center gap-4">
             <div className="p-3 bg-green-100 rounded-xl"><TrendingUp className="w-6 h-6 text-green-600" /></div>
-            <div><p className="text-sm text-slate-600">Leads Available</p><p className="text-2xl font-bold text-slate-900">{totalLeads}</p></div>
+            <div>
+              <p className="text-sm text-slate-600">Leads Available</p>
+              <p className="text-2xl font-bold text-slate-900">{totalLeads}</p>
+            </div>
           </div>
           <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 flex items-center gap-4">
             <div className="p-3 bg-amber-100 rounded-xl"><Crown className="w-6 h-6 text-amber-600" /></div>
-            <div><p className="text-sm text-slate-600">Est. Revenue</p><p className="text-2xl font-bold text-slate-900">${estimatedRevenue}</p></div>
+            <div>
+              <p className="text-sm text-slate-600">Est. Revenue</p>
+              <p className="text-2xl font-bold text-slate-900">${estimatedRevenue}</p>
+            </div>
           </div>
         </div>
 
@@ -160,27 +214,45 @@ function DashboardContent() {
           <aside className="w-full lg:w-1/4">
             <div className="sticky top-20 space-y-4">
               <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2"><span>🎯</span> Filter by Skill</h3>
+                <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
+                  <span>🎯</span> Filter by Skill
+                </h3>
                 <SkillSwitcher selectedSkill={selectedSkill} onSkillChange={setSelectedSkill} />
-                <p className="text-xs text-slate-500 mt-4">Showing {leads.length} {leads.length === 1 ? 'lead' : 'leads'}</p>
+                <p className="text-xs text-slate-500 mt-4">
+                  Showing {leads.length} {leads.length === 1 ? 'lead' : 'leads'}
+                </p>
               </div>
               <div className="bg-gradient-to-br from-blue-50 to-indigo-50 p-5 rounded-2xl border border-blue-100">
-                <h4 className="font-semibold text-slate-800 flex items-center gap-2 mb-2"><Sparkles className="w-4 h-4 text-blue-600" /> Pro Tip</h4>
-                <p className="text-sm text-slate-600">Use AI Pitch to stand out. Pro users get <span className="font-bold text-blue-600">50 pitches/month</span> and <span className="font-bold">10‑sec alerts</span>.</p>
+                <h4 className="font-semibold text-slate-800 flex items-center gap-2 mb-2">
+                  <Sparkles className="w-4 h-4 text-blue-600" /> Pro Tip
+                </h4>
+                <p className="text-sm text-slate-600">
+                  Use AI Pitch to stand out. Pro users get{' '}
+                  <span className="font-bold text-blue-600">50 pitches/month</span> and{' '}
+                  <span className="font-bold">10‑sec alerts</span>.
+                </p>
               </div>
             </div>
           </aside>
 
           <section className="w-full lg:w-3/4">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold text-slate-900">{selectedSkill === 'all' ? 'All Recommended Leads' : `${selectedSkill} Leads`}</h2>
-              <div className="text-sm text-slate-500 bg-white px-4 py-2 rounded-lg border border-slate-200 shadow-sm">{leads.length} fresh gigs</div>
+              <h2 className="text-2xl font-bold text-slate-900">
+                {selectedSkill === 'all' ? 'All Recommended Leads' : `${selectedSkill} Leads`}
+              </h2>
+              <div className="text-sm text-slate-500 bg-white px-4 py-2 rounded-lg border border-slate-200 shadow-sm">
+                {leads.length} fresh gigs
+              </div>
             </div>
 
             {loading ? (
-              <div className="flex justify-center py-20"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" /></div>
+              <div className="flex justify-center py-20">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" />
+              </div>
             ) : leads.length === 0 ? (
-              <div className="bg-white rounded-2xl p-12 text-center border border-slate-200"><p className="text-slate-500">No leads found for this skill. Try another filter.</p></div>
+              <div className="bg-white rounded-2xl p-12 text-center border border-slate-200">
+                <p className="text-slate-500">No leads found for this skill. Try another filter.</p>
+              </div>
             ) : (
               <div className="grid grid-cols-1 gap-4">
                 {leads.map((lead) => (
@@ -188,9 +260,9 @@ function DashboardContent() {
                     key={lead.id}
                     lead={lead}
                     onGeneratePitch={handleGeneratePitch}
-                    initialCredits={credits}               // ✅ changed from creditsRemaining
-                    isLoggedIn={true}                       // ✅ user is logged in (DEMO)
-                    userPlan={isPro ? 'PRO' : 'FREE'}       // ✅ pass plan based on fetched profile
+                    initialCredits={credits}
+                    isLoggedIn={true} // user is definitely logged in
+                    userPlan={isPro ? 'PRO' : 'FREE'}
                   />
                 ))}
               </div>
@@ -202,4 +274,5 @@ function DashboardContent() {
   );
 }
 
+// Use dynamic import with SSR disabled to avoid hydration issues
 export default dynamic(() => Promise.resolve(DashboardContent), { ssr: false });
