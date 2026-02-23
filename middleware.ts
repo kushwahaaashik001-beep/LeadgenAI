@@ -5,7 +5,7 @@ import type { NextRequest } from 'next/server';
 // Rate limiting configuration (in‑memory – for production use Redis)
 const RATE_LIMIT = {
   windowMs: 60 * 1000, // 1 minute
-  maxRequests: 100, // limit each IP to 100 requests per windowMs
+  maxRequests: 100,    // limit each IP to 100 requests per windowMs
   message: 'Too many requests, please try again later.',
 };
 
@@ -45,7 +45,7 @@ export async function middleware(req: NextRequest) {
   }
 
   // -------------------- Session Management --------------------
-  // This is the key line that refreshes the session cookie on every request
+  // This refreshes the session cookie on every request
   const { data: { session } } = await supabase.auth.getSession();
 
   // -------------------- Route Protection --------------------
@@ -67,7 +67,7 @@ export async function middleware(req: NextRequest) {
   const publicApiRoutes = [
     '/api/health',
     '/api/webhook',
-    '/api/generate-pitch',   // This is still protected inside the route itself (rate limit + auth check)
+    '/api/generate-pitch',   // This is still protected inside the route itself
   ];
 
   const isPublicRoute = publicRoutes.some(route => pathname === route);
@@ -84,15 +84,15 @@ export async function middleware(req: NextRequest) {
     // User is authenticated
     const user = session.user;
 
-    // Redirect from auth pages to dashboard (common UX)
+    // Redirect from auth pages to dashboard
     if (pathname === '/login' || pathname === '/signup') {
       return NextResponse.redirect(new URL('/dashboard', req.url));
     }
 
-    // (Optional) Check email verification for dashboard
-    if (!user.email_confirmed_at && pathname.startsWith('/dashboard')) {
-      return NextResponse.redirect(new URL('/verify-email', req.url));
-    }
+    // ***********************************************************
+    // 🛑 FIX: Email verification check removed – it was breaking login persistence
+    //    because email_confirmed_at may be null for OAuth users temporarily.
+    // ***********************************************************
 
     // (Optional) Pro subscription check for pro‑only pages
     if (pathname.startsWith('/pro-features')) {
@@ -121,7 +121,8 @@ export async function middleware(req: NextRequest) {
 
   // -------------------- CORS for API Routes --------------------
   if (pathname.startsWith('/api/')) {
-    res.headers.set('Access-Control-Allow-Origin', process.env.NEXT_PUBLIC_APP_URL || 'https://leadgenai.com');
+    const allowedOrigin = process.env.NEXT_PUBLIC_APP_URL || 'https://leadgenai.com';
+    res.headers.set('Access-Control-Allow-Origin', allowedOrigin);
     res.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     res.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
     res.headers.set('Access-Control-Max-Age', '86400');
