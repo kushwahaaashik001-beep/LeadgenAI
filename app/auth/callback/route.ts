@@ -9,9 +9,10 @@ export async function GET(request: Request) {
   if (code) {
     const cookieStore = cookies();
     const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
+    // Exchange the code for a session – this sets the auth cookie
     await supabase.auth.exchangeCodeForSession(code);
   }
 
-  // Login ke baad user ko dashboard par bhej do
+  // After successful login, redirect to dashboard (or home)
   return NextResponse.redirect(new URL('/dashboard', request.url));
 }
